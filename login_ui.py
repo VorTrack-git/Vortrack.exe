@@ -38,10 +38,8 @@ class LoginApp:
         self.root = root
         self.on_success = on_success
         self.root.title("VorTrack - Login")
-        # Los widgets nativos de tkinter ocupan más alto que los de customtkinter,
-        # por eso la ventana se hace un poco más grande cuando no hay ctk.
-        ui_utils.center_window(self.root, 1024, 720 if ctk else 800)
         self.root.minsize(860, 700)
+        ui_utils.maximize_window(self.root)
         self.root.configure(bg=COLORS["background"])
         
         # Paths for images
@@ -66,20 +64,31 @@ class LoginApp:
         self._load_remembered_user()
         self.root.bind("<Return>", lambda _event: self.login())
 
+    def _draw_bg_glow(self, event=None):
+        """Dibuja el círculo de brillo centrado, escalado al tamaño actual del lienzo."""
+        w = self.bg_canvas.winfo_width()
+        h = self.bg_canvas.winfo_height()
+        self.bg_canvas.delete("glow")
+        diameter = int(min(w, h) * 1.15)
+        cx, cy = w // 2, h // 2
+        self.bg_canvas.create_oval(
+            cx - diameter // 2, cy - diameter // 2,
+            cx + diameter // 2, cy + diameter // 2,
+            fill="#081d33",  # tinte cian-azulado sutil sobre el fondo
+            outline="",
+            tags="glow",
+        )
+
     def setup_ui(self):
         # Master container
         self.main_container = tk.Frame(self.root, bg=COLORS["background"])
         self.main_container.pack(fill="both", expand=True)
 
-        # Draw a subtle center glow in the background using Canvas
+        # Draw a subtle center glow in the background using Canvas.
+        # Se redibuja al cambiar el tamaño para quedar centrado en cualquier resolución.
         self.bg_canvas = tk.Canvas(self.main_container, bg=COLORS["background"], highlightthickness=0)
         self.bg_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        # We can simulate the big circular glow with a large oval
-        self.bg_canvas.create_oval(
-            112, -50, 912, 750,  # rough coordinates to make a big circle in the middle
-            fill="#081d33",      # slight cyan-blue tint over the background
-            outline=""
-        )
+        self.bg_canvas.bind("<Configure>", self._draw_bg_glow)
 
         # ---------------------------------------------------------
         # LOGIN CARD

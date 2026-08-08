@@ -355,8 +355,8 @@ class RecoleccionesApp:
     def __init__(self, root):
         self.root = root
         self.root.title("VorTrack - Recolecciones")
-        ui_utils.center_window(self.root, 1280, 830)
         self.root.minsize(1024, 700)
+        ui_utils.maximize_window(self.root)
         self.root.configure(bg=COLORS["background"])
 
         self.base_dir = os.path.dirname(os.path.abspath(__file__))

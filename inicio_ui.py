@@ -46,8 +46,8 @@ class VorTrackApp:
         self.on_logout = on_logout
         self.current_user = auth.get_current_user()
         self.root.title("VorTrack - Quiénes somos")
-        ui_utils.center_window(self.root, 1280, 830)
         self.root.minsize(1024, 700)
+        ui_utils.maximize_window(self.root)
         self.root.configure(bg=COLORS["background"])
 
         # Load Images

@@ -1,6 +1,7 @@
 """Utilidades de interfaz compartidas por los módulos de VorTrack."""
 
 import os
+import tkinter as tk
 from tkinter import messagebox
 
 # pyrefly: ignore [missing-import]
@@ -13,19 +14,17 @@ except ImportError:
     ctk = None
 
 
-def center_window(root, width, height, taskbar_ratio=0.92):
-    """Centra la ventana en pantalla evitando que quede bajo la barra de tareas."""
+def maximize_window(root):
+    """Abre la ventana maximizada (ocupa toda la pantalla y conserva la barra de título)."""
     root.update_idletasks()
-    screen_w = root.winfo_screenwidth()
-    screen_h = root.winfo_screenheight()
-
-    usable_h = int(screen_h * taskbar_ratio)
-    height = min(height, usable_h)
-    width = min(width, screen_w)
-
-    x = max((screen_w - width) // 2, 0)
-    y = max((usable_h - height) // 2, 0)
-    root.geometry(f"{width}x{height}+{x}+{y}")
+    try:
+        root.state("zoomed")  # Windows y la mayoría de Tk en Windows
+    except tk.TclError:
+        try:
+            root.attributes("-zoomed", True)  # algunos entornos Linux
+        except tk.TclError:
+            # Último recurso: geometría del tamaño completo de pantalla
+            root.geometry(f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0")
 
 
 def load_image(path, size):
