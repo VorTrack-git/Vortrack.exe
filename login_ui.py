@@ -1,0 +1,385 @@
+import os
+import tkinter as tk
+from tkinter import messagebox
+
+import auth
+import ui_utils
+# pyrefly: ignore [missing-import]
+from PIL import Image, ImageTk
+
+try:
+    # pyrefly: ignore [missing-import]
+    import customtkinter as ctk
+except ImportError:
+    ctk = None
+
+# ---------------------------------------------------------
+# COLOR PALETTE (Matched from the HTML provided)
+# ---------------------------------------------------------
+COLORS = {
+    "background": "#051424",
+    "surface": "#0d1117",              # For input fields
+    "surface_container": "#122131",    # Glass panel simulation
+    "primary": "#dbfcff",
+    "primary_fixed": "#7df4ff",
+    "primary_container": "#00f0ff",
+    "secondary_container": "#0056fd",
+    "on_surface": "#d4e4fa",
+    "on_surface_variant": "#b9cacb",
+    "outline_variant": "#3b494b",
+    "white": "#ffffff",
+    "footer": "#010f1f"
+}
+
+FONT_FAMILY = "Segoe UI"
+
+class LoginApp:
+    def __init__(self, root, on_success=None):
+        self.root = root
+        self.on_success = on_success
+        self.root.title("VorTrack - Login")
+        # Los widgets nativos de tkinter ocupan más alto que los de customtkinter,
+        # por eso la ventana se hace un poco más grande cuando no hay ctk.
+        ui_utils.center_window(self.root, 1024, 720 if ctk else 800)
+        self.root.minsize(860, 700)
+        self.root.configure(bg=COLORS["background"])
+        
+        # Paths for images
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.logo_path = os.path.join(self.base_dir, "Vortrack logo.png")
+        self.icon_path = os.path.join(self.base_dir, "VorTrack icon.png")
+        
+        # Set Window Icon
+        if os.path.exists(self.icon_path):
+            try:
+                icon_img = Image.open(self.icon_path)
+                self.icon_photo = ImageTk.PhotoImage(icon_img)
+                self.root.iconphoto(False, self.icon_photo)
+            except Exception as e:
+                print(f"Could not load iconphoto: {e}")
+
+        # Configure CustomTkinter settings
+        if ctk:
+            ctk.set_appearance_mode("Dark")
+
+        self.setup_ui()
+        self._load_remembered_user()
+        self.root.bind("<Return>", lambda _event: self.login())
+
+    def setup_ui(self):
+        # Master container
+        self.main_container = tk.Frame(self.root, bg=COLORS["background"])
+        self.main_container.pack(fill="both", expand=True)
+
+        # Draw a subtle center glow in the background using Canvas
+        self.bg_canvas = tk.Canvas(self.main_container, bg=COLORS["background"], highlightthickness=0)
+        self.bg_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        # We can simulate the big circular glow with a large oval
+        self.bg_canvas.create_oval(
+            112, -50, 912, 750,  # rough coordinates to make a big circle in the middle
+            fill="#081d33",      # slight cyan-blue tint over the background
+            outline=""
+        )
+
+        # ---------------------------------------------------------
+        # LOGIN CARD
+        # ---------------------------------------------------------
+        card_width = 480
+        card_height = 590 if ctk else 700
+        
+        if ctk:
+            self.card = ctk.CTkFrame(
+                self.main_container,
+                width=card_width,
+                height=card_height,
+                fg_color=COLORS["surface_container"],
+                border_color=COLORS["primary_fixed"],
+                border_width=1,
+                corner_radius=16
+            )
+            self.card.place(relx=0.5, rely=0.5, anchor="center")
+            self.card.pack_propagate(False)
+        else:
+            self.card = tk.Frame(self.main_container, bg=COLORS["surface_container"], width=card_width, height=card_height, bd=1, relief="solid")
+            self.card.place(relx=0.5, rely=0.5, anchor="center")
+            self.card.pack_propagate(False)
+
+        # Top border accent logic (gradient simulated with a colored frame)
+        accent_frame = tk.Frame(self.card, bg=COLORS["primary_fixed"], height=3)
+        accent_frame.pack(side="top", fill="x")
+
+        # --- Logo ---
+        self.logo_img = ui_utils.load_image(self.icon_path, size=(110, 110))
+        if self.logo_img:
+            if ctk:
+                logo_lbl = ctk.CTkLabel(self.card, image=self.logo_img, text="")
+            else:
+                logo_lbl = tk.Label(self.card, image=self.logo_img, bg=COLORS["surface_container"])
+            logo_lbl.pack(pady=(35, 10))
+        else:
+            # Fallback solo si la imagen no existe en disco
+            tk.Label(self.card, text="[Logo]", bg=COLORS["surface_container"], fg=COLORS["white"]).pack(pady=(40, 10))
+
+        # --- Titles ---
+        if ctk:
+            title = ctk.CTkLabel(self.card, text="VorTrack", font=(FONT_FAMILY, 34, "bold"), text_color=COLORS["primary_container"])
+            title.pack()
+            sub = ctk.CTkLabel(self.card, text="Gestión, Seguimiento y Transformación", font=(FONT_FAMILY, 14), text_color=COLORS["on_surface_variant"])
+            sub.pack(pady=(0, 25))
+        else:
+            tk.Label(self.card, text="VorTrack", font=(FONT_FAMILY, 30, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_container"]).pack()
+            tk.Label(self.card, text="Gestión, Seguimiento y Transformación", font=(FONT_FAMILY, 12), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(pady=(0, 20))
+
+        # --- Form Area ---
+        if ctk:
+            form_frame = ctk.CTkFrame(self.card, fg_color="transparent")
+        else:
+            form_frame = tk.Frame(self.card, bg=COLORS["surface_container"])
+        form_frame.pack(fill="both", expand=True, padx=40)
+
+        self.remember_var = tk.BooleanVar(value=False)
+        self._build_form(form_frame)
+
+        # ---------------------------------------------------------
+        # FOOTER
+        # ---------------------------------------------------------
+        border_top = tk.Frame(self.root, bg=COLORS["outline_variant"], height=1)
+        border_top.pack(side="bottom", fill="x")
+
+        footer = tk.Frame(self.root, bg=COLORS["footer"], height=55)
+        footer.pack(side="bottom", fill="x")
+        footer.pack_propagate(False)
+        
+        copy_lbl = tk.Label(
+            footer,
+            text="© 2026 desarrollado por Miguel Ruiz Ramirez",
+            fg=COLORS["on_surface_variant"],
+            bg=COLORS["footer"],
+            font=(FONT_FAMILY, 10)
+        )
+        copy_lbl.pack(expand=True)
+
+    def _build_form(self, form_frame):
+        if ctk:
+            user_lbl = ctk.CTkLabel(form_frame, text="IDENTIFICADOR", font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"])
+            user_lbl.pack(anchor="w")
+            self.user_entry = ctk.CTkEntry(
+                form_frame,
+                placeholder_text="admin@vortrack.sys",
+                height=45,
+                fg_color=COLORS["surface"],
+                border_color=COLORS["outline_variant"],
+                text_color=COLORS["on_surface"],
+                font=(FONT_FAMILY, 14),
+                corner_radius=8
+            )
+            self.user_entry.pack(fill="x", pady=(2, 16))
+
+            pass_lbl = ctk.CTkLabel(form_frame, text="CREDENCIAL DE ACCESO", font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"])
+            pass_lbl.pack(anchor="w")
+            self.pass_entry = ctk.CTkEntry(
+                form_frame,
+                placeholder_text="••••••••",
+                show="*",
+                height=45,
+                fg_color=COLORS["surface"],
+                border_color=COLORS["outline_variant"],
+                text_color=COLORS["on_surface"],
+                font=(FONT_FAMILY, 14),
+                corner_radius=8
+            )
+            self.pass_entry.pack(fill="x", pady=(2, 10))
+
+            options_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+            options_frame.pack(fill="x", pady=(5, 20))
+
+            remember_cb = ctk.CTkCheckBox(
+                options_frame,
+                text="Recordar sesión",
+                variable=self.remember_var,
+                font=(FONT_FAMILY, 12),
+                text_color=COLORS["on_surface_variant"],
+                fg_color=COLORS["primary_fixed"],
+                hover_color=COLORS["primary_container"],
+                border_color=COLORS["outline_variant"],
+                checkbox_height=20,
+                checkbox_width=20,
+                corner_radius=4
+            )
+            remember_cb.pack(side="left")
+
+            forgot_btn = ctk.CTkButton(
+                options_frame,
+                text="¿Olvidó su credencial?",
+                font=(FONT_FAMILY, 12, "underline"),
+                text_color=COLORS["primary_fixed"],
+                fg_color="transparent",
+                hover_color=COLORS["surface_container"],
+                width=0,
+                height=20,
+                command=self.forgot_password
+            )
+            forgot_btn.pack(side="right")
+
+            login_btn = ctk.CTkButton(
+                form_frame,
+                text="INICIAR SESIÓN",
+                font=(FONT_FAMILY, 15, "bold"),
+                height=48,
+                fg_color=COLORS["secondary_container"],
+                hover_color=COLORS["primary_container"],
+                text_color=COLORS["white"],
+                corner_radius=8,
+                command=self.login
+            )
+            login_btn.pack(fill="x", pady=(10, 15))
+
+            status_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+            status_frame.pack(fill="x", pady=(0, 20))
+
+            status_inner = ctk.CTkFrame(status_frame, fg_color="transparent")
+            status_inner.pack()  # centrado horizontalmente
+
+            status_dot = ctk.CTkLabel(status_inner, text="●", font=(FONT_FAMILY, 18), text_color=COLORS["primary_fixed"])
+            status_dot.pack(side="left", padx=(0, 6))
+
+            status_txt = ctk.CTkLabel(status_inner, text="SISTEMA EN LÍNEA", font=(FONT_FAMILY, 11, "bold"), text_color=COLORS["on_surface_variant"])
+            status_txt.pack(side="left")
+            return
+
+        user_lbl = tk.Label(form_frame, text="IDENTIFICADOR", font=(FONT_FAMILY, 12, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
+        user_lbl.pack(anchor="w")
+        self.user_entry = tk.Entry(form_frame, bg=COLORS["surface"], fg=COLORS["on_surface"], insertbackground=COLORS["on_surface"], font=(FONT_FAMILY, 14), relief="flat")
+        self.user_entry.pack(fill="x", ipady=8, pady=(2, 16))
+
+        pass_lbl = tk.Label(form_frame, text="CREDENCIAL DE ACCESO", font=(FONT_FAMILY, 12, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
+        pass_lbl.pack(anchor="w")
+        self.pass_entry = tk.Entry(form_frame, show="*", bg=COLORS["surface"], fg=COLORS["on_surface"], insertbackground=COLORS["on_surface"], font=(FONT_FAMILY, 14), relief="flat")
+        self.pass_entry.pack(fill="x", ipady=8, pady=(2, 10))
+
+        options_frame = tk.Frame(form_frame, bg=COLORS["surface_container"])
+        options_frame.pack(fill="x", pady=(5, 20))
+
+        remember_cb = tk.Checkbutton(
+            options_frame,
+            text="Recordar sesión",
+            variable=self.remember_var,
+            bg=COLORS["surface_container"],
+            fg=COLORS["on_surface_variant"],
+            selectcolor=COLORS["surface"],
+            activebackground=COLORS["surface_container"],
+            activeforeground=COLORS["on_surface_variant"],
+            font=(FONT_FAMILY, 12)
+        )
+        remember_cb.pack(side="left")
+
+        forgot_btn = tk.Button(
+            options_frame,
+            text="¿Olvidó su credencial?",
+            bg=COLORS["surface_container"],
+            fg=COLORS["primary_fixed"],
+            activebackground=COLORS["surface_container"],
+            activeforeground=COLORS["primary_fixed"],
+            relief="flat",
+            borderwidth=0,
+            font=(FONT_FAMILY, 12, "underline"),
+            cursor="hand2",
+            command=self.forgot_password
+        )
+        forgot_btn.pack(side="right")
+
+        login_btn = tk.Button(
+            form_frame,
+            text="INICIAR SESIÓN",
+            bg=COLORS["secondary_container"],
+            fg=COLORS["white"],
+            activebackground=COLORS["primary_container"],
+            activeforeground=COLORS["white"],
+            font=(FONT_FAMILY, 15, "bold"),
+            relief="flat",
+            cursor="hand2",
+            command=self.login
+        )
+        login_btn.pack(fill="x", ipady=10, pady=(10, 15))
+
+        status_frame = tk.Frame(form_frame, bg=COLORS["surface_container"])
+        status_frame.pack(fill="x", pady=(0, 20))
+
+        status_inner = tk.Frame(status_frame, bg=COLORS["surface_container"])
+        status_inner.pack()  # centrado horizontalmente
+
+        status_dot = tk.Label(status_inner, text="●", font=(FONT_FAMILY, 18), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"])
+        status_dot.pack(side="left", padx=(0, 6))
+
+        status_txt = tk.Label(status_inner, text="SISTEMA EN LÍNEA", font=(FONT_FAMILY, 11, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
+        status_txt.pack(side="left")
+
+    def _load_remembered_user(self):
+        remembered = auth.load_remembered_user()
+        if remembered:
+            self.user_entry.insert(0, remembered)
+            self.remember_var.set(True)
+
+    # ---------------------------------------------------------
+    # ACTIONS
+    # ---------------------------------------------------------
+    def forgot_password(self):
+        import soporte_dialog
+        messagebox.showinfo(
+            "Recuperar Credencial",
+            "Para restablecer su contraseña, escriba al correo de soporte:\n\n"
+            f"{soporte_dialog.SOPORTE_EMAIL}",
+        )
+
+    def login(self):
+        user = self.user_entry.get()
+        pwd = self.pass_entry.get()
+
+        if user.strip() == "" or pwd.strip() == "":
+            messagebox.showwarning("Campos Requeridos", "Por favor ingrese su identificador y credencial de acceso.")
+            return
+
+        if not auth.authenticate(user, pwd):
+            messagebox.showerror(
+                "Acceso Denegado",
+                "Identificador o credencial incorrectos.\n\nVerifique sus datos e intente nuevamente."
+            )
+            self.pass_entry.delete(0, "end")
+            self.pass_entry.focus_set()
+            return
+
+        if self.remember_var.get():
+            auth.save_remembered_user(user)
+        else:
+            auth.clear_remembered_user()
+
+        if self.on_success:
+            self.on_success()
+            return
+
+        print("Login Exitoso. Iniciando VorTrack...")
+        self.root.destroy()
+
+        try:
+            import inicio_ui
+            inicio_ui.main()
+        except ImportError:
+            messagebox.showerror("Error de Inicio", "No se encontró el módulo principal de la aplicación (inicio_ui.py).")
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error al iniciar la aplicación:\n{e}")
+
+def main():
+    try:
+        from app import run
+        run()
+    except ImportError:
+        if ctk:
+            root = ctk.CTk()
+        else:
+            root = tk.Tk()
+
+        LoginApp(root)
+        root.mainloop()
+
+if __name__ == "__main__":
+    main()
