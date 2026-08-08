@@ -10,7 +10,7 @@ REMEMBER_FILE = os.path.join(BASE_DIR, ".vortrack_remember.json")
 
 # Usuario demo hasta conectar una base de datos real.
 _USERS = {
-    "admin@vortrack.sys": hashlib.sha256("admin".encode("utf-8")).hexdigest(),
+    "vortrack.soporte@gmail.com": hashlib.sha256("12345678".encode("utf-8")).hexdigest(),
 }
 
 _session: Optional[dict] = None

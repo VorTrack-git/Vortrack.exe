@@ -174,7 +174,7 @@ class LoginApp:
             user_lbl.pack(anchor="w")
             self.user_entry = ctk.CTkEntry(
                 form_frame,
-                placeholder_text="admin@vortrack.sys",
+                placeholder_text="vortrack.soporte@gmail.com",
                 height=45,
                 fg_color=COLORS["surface"],
                 border_color=COLORS["outline_variant"],

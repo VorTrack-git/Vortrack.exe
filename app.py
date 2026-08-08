@@ -6,6 +6,7 @@ from tkinter import messagebox
 import auth
 import inicio_ui
 import login_ui
+import recolec_ui
 
 try:
     import customtkinter as ctk
@@ -44,21 +45,28 @@ def show_login() -> bool:
     return result["authenticated"]
 
 
-def show_main_app() -> bool:
+def show_main_app(page: str = "inicio") -> str:
     """
-    Muestra la aplicación principal.
-    Retorna True si el usuario cerró sesión (volver al login), False si salió de la app.
+    Muestra una página de la aplicación autenticada.
+    Retorna la próxima acción: 'inicio', 'recoleccion', 'logout' o 'exit'.
     """
-    result = {"logout": False}
+    result = {"next": "exit"}
 
     root = _create_root()
 
-    def on_logout():
-        auth.logout()
-        result["logout"] = True
+    def navigate(destino):
+        result["next"] = destino
         root.quit()
 
-    inicio_ui.VorTrackApp(root, on_logout=on_logout)
+    def on_logout():
+        result["next"] = "logout"
+        root.quit()
+
+    if page == "recoleccion":
+        recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout)
+    else:
+        inicio_ui.VorTrackApp(root, on_navigate=navigate, on_logout=on_logout)
+
     root.protocol("WM_DELETE_WINDOW", root.quit)
     root.mainloop()
 
@@ -67,11 +75,11 @@ def show_main_app() -> bool:
     except tk.TclError:
         pass
 
-    return result["logout"]
+    return result["next"]
 
 
 def run():
-    """Ejecuta el ciclo login -> app -> logout -> login."""
+    """Ejecuta el ciclo login -> app (con navegación entre páginas) -> logout -> login."""
     while True:
         if not show_login():
             break
@@ -79,9 +87,17 @@ def run():
         if not auth.is_authenticated():
             continue
 
-        if not show_main_app():
-            auth.logout()
-            break
+        page = "inicio"
+        while True:
+            action = show_main_app(page)
+            if action in ("inicio", "recoleccion"):
+                page = action
+                continue
+            if action == "logout":
+                auth.logout()
+                break  # vuelve al login
+            # 'exit': el usuario cerró la ventana -> terminar la app
+            return
 
 
 if __name__ == "__main__":

@@ -41,9 +41,10 @@ COLORS = {
 FONT_FAMILY = "Segoe UI"  # Fallback for Windows cross-compatibility
 
 class VorTrackApp:
-    def __init__(self, root, on_logout=None):
+    def __init__(self, root, on_logout=None, on_navigate=None):
         self.root = root
         self.on_logout = on_logout
+        self.on_navigate = on_navigate
         self.current_user = auth.get_current_user()
         self.root.title("VorTrack - Quiénes somos")
         self.root.minsize(1024, 700)
@@ -554,13 +555,23 @@ class VorTrackApp:
     # ACTIONS
     # ---------------------------------------------------------
     def on_registrar_select(self, choice):
-        if choice != "REGISTRAR ▾":
-            messagebox.showinfo("Registro", f"Navegando al módulo de: {choice}")
-            if hasattr(self, "registrar_btn") and ctk:
-                self.registrar_btn.set("REGISTRAR ▾")
+        # Restaura la etiqueta del menú (solo en la versión ctk).
+        if hasattr(self, "registrar_btn") and ctk:
+            self.registrar_btn.set("REGISTRAR ▾")
+
+        if choice == "Recolección":
+            if self.on_navigate:
+                self.on_navigate("recoleccion")
+            else:
+                messagebox.showinfo("Recolección", "El módulo de Recolección se abre desde la aplicación principal.")
+        elif choice in ("Transformación", "Impresión"):
+            messagebox.showinfo(choice, f"El módulo de {choice} estará disponible próximamente.")
 
     def explorar_sistema(self):
-        messagebox.showinfo("VorTrack", "Iniciando explorador del sistema TRANSRE/SC...")
+        if self.on_navigate:
+            self.on_navigate("recoleccion")
+        else:
+            messagebox.showinfo("VorTrack", "Iniciando explorador del sistema TRANSRE/SC...")
 
     def logout(self):
         if messagebox.askyesno("Cerrar sesión", "¿Desea cerrar sesión en VorTrack?"):

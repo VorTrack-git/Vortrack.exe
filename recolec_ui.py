@@ -352,8 +352,10 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecoleccionesApp:
-    def __init__(self, root):
+    def __init__(self, root, on_navigate=None, on_logout=None):
         self.root = root
+        self.on_navigate = on_navigate
+        self.on_logout = on_logout
         self.root.title("VorTrack - Recolecciones")
         self.root.minsize(1024, 700)
         ui_utils.maximize_window(self.root)
@@ -425,7 +427,7 @@ class RecoleccionesApp:
         nav_items_frame = tk.Frame(navbar_content, bg=COLORS["surface_container"])
         nav_items_frame.pack(side="left", expand=True)
 
-        # Item 1: Quienes Somos (Inactive)
+        # Item 1: Quienes Somos (vuelve a la página de inicio)
         lbl_quienes = tk.Label(
             nav_items_frame,
             text="QUIÉNES SOMOS",
@@ -435,6 +437,7 @@ class RecoleccionesApp:
             cursor="hand2"
         )
         lbl_quienes.pack(side="left", padx=16)
+        lbl_quienes.bind("<Button-1>", lambda _e: self.ir_a_inicio())
 
         # Item 2: Registrar Dropdown Button
         if ctk:
@@ -452,7 +455,8 @@ class RecoleccionesApp:
                 dynamic_resizing=False,
                 width=130,
                 height=32,
-                corner_radius=12
+                corner_radius=12,
+                command=self.on_registrar_select
             )
             self.registrar_btn.set("REGISTRAR ▾")
             self.registrar_btn.pack(side="left", padx=10)
@@ -469,9 +473,9 @@ class RecoleccionesApp:
                 cursor="hand2"
             )
             registrar_menu = tk.Menu(registrar_btn, tearoff=0, bg=COLORS["surface_container"], fg=COLORS["on_surface"])
-            registrar_menu.add_command(label="Recolección")
-            registrar_menu.add_command(label="Transformación")
-            registrar_menu.add_command(label="Impresión")
+            registrar_menu.add_command(label="Recolección", command=lambda: self.on_registrar_select("Recolección"))
+            registrar_menu.add_command(label="Transformación", command=lambda: self.on_registrar_select("Transformación"))
+            registrar_menu.add_command(label="Impresión", command=lambda: self.on_registrar_select("Impresión"))
             registrar_btn.config(menu=registrar_menu)
             registrar_btn.pack(side="left", padx=16)
 
@@ -586,10 +590,28 @@ class RecoleccionesApp:
                 hover_fg=COLORS["primary_fixed"]
             )
 
+    def ir_a_inicio(self):
+        if self.on_navigate:
+            self.on_navigate("inicio")
+
+    def on_registrar_select(self, choice):
+        # Restaura la etiqueta del menú (solo en la versión ctk).
+        if hasattr(self, "registrar_btn") and ctk:
+            self.registrar_btn.set("REGISTRAR ▾")
+
+        if choice == "Recolección":
+            # Ya estamos en la página de recolecciones.
+            return
+        if choice in ("Transformación", "Impresión"):
+            messagebox.showinfo(choice, f"El módulo de {choice} estará disponible próximamente.")
+
     def logout(self):
         if messagebox.askyesno("Cerrar sesión", "¿Desea cerrar sesión en VorTrack?"):
-            auth.logout()
-            self.root.destroy()
+            if self.on_logout:
+                self.on_logout()
+            else:
+                auth.logout()
+                self.root.destroy()
 
 def main():
     auth.require_auth()
