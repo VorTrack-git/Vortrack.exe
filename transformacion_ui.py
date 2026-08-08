@@ -45,23 +45,28 @@ COLORS = {
 
 FONT_FAMILY = "Segoe UI"
 
-class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
+RESPONSABLES = ["Seleccione responsable...", "Arnaldo", "Miguel", "Juan", "María"]
+PROCESOS = ["Seleccione proceso...", "Triturado (hojuelas)", "Lavado y secado",
+            "Extrusión a filamento", "Peletizado", "Moldeado / Laminado"]
+
+
+class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
     def __init__(self, parent, on_register_callback=None, **kwargs):
         self.on_register_callback = on_register_callback
         if ctk:
             super().__init__(parent, fg_color=COLORS["surface_container"], border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12, **kwargs)
         else:
             super().__init__(parent, bg=COLORS["surface_container"], bd=1, relief="solid", **kwargs)
-            
+
         self.setup_ui()
 
     def setup_ui(self):
         # Título
         if ctk:
-            title = ctk.CTkLabel(self, text="Nueva Recolección", font=(FONT_FAMILY, 20, "bold"), text_color=COLORS["primary_fixed"])
+            title = ctk.CTkLabel(self, text="Nueva Transformación", font=(FONT_FAMILY, 20, "bold"), text_color=COLORS["primary_fixed"])
             title.pack(pady=(25, 20))
         else:
-            tk.Label(self, text="Nueva Recolección", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15))
+            tk.Label(self, text="Nueva Transformación", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15))
 
         # Contenedor del formulario
         if ctk:
@@ -73,7 +78,7 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
         # 1. Fecha del Registro
         self.create_label(form_frame, "Fecha del Registro")
 
-        # Patch ttk style so DateEntry's internal Entry widget uses dark colors
+        # Estilo ttk para que el Entry interno del DateEntry use colores oscuros
         _style = ttk.Style()
         _style.theme_use("default")
         _style.configure("DateEntry",
@@ -130,15 +135,13 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
                 self.date_entry.insert(0, current_date)
                 self.date_entry.pack(fill="x", pady=(2, 10))
 
-        # 2. Estudiante / Aportante
-        self.create_label(form_frame, "Estudiante / Aportante")
-        
-        estudiantes = ["Seleccione estudiante...", "Arnaldo", "Miguel", "Juan", "María"]
-        
+        # 2. Responsable
+        self.create_label(form_frame, "Responsable")
+
         if ctk:
-            self.student_combo = ctk.CTkOptionMenu(
+            self.resp_combo = ctk.CTkOptionMenu(
                 form_frame,
-                values=estudiantes,
+                values=RESPONSABLES,
                 height=35,
                 fg_color=COLORS["surface_lowest"],
                 button_color=COLORS["surface_lowest"],
@@ -147,39 +150,61 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
                 dropdown_hover_color=COLORS["outline_variant"],
                 text_color=COLORS["on_surface"]
             )
-            self.student_combo.set(estudiantes[0])
-            self.student_combo.pack(fill="x", pady=(2, 2))
-            
-            # Subtítulo (Hint)
-            hint_lbl = ctk.CTkLabel(form_frame, text="Se le asignarán los puntos automáticamente", font=(FONT_FAMILY, 10), text_color=COLORS["on_surface_variant"], wraplength=340, justify="left")
-            hint_lbl.pack(anchor="w", pady=(0, 15))
+            self.resp_combo.set(RESPONSABLES[0])
+            self.resp_combo.pack(fill="x", pady=(2, 15))
         else:
-            self.student_var = tk.StringVar(value=estudiantes[0])
-            self.student_combo = tk.OptionMenu(form_frame, self.student_var, *estudiantes)
-            self.student_combo.config(
+            self.resp_var = tk.StringVar(value=RESPONSABLES[0])
+            self.resp_combo = tk.OptionMenu(form_frame, self.resp_var, *RESPONSABLES)
+            self.resp_combo.config(
                 bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
                 activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
                 highlightthickness=0, bd=0
             )
-            self.student_combo.pack(fill="x", pady=(2, 2))
-            tk.Label(form_frame, text="Se le asignarán los puntos automáticamente", font=(FONT_FAMILY, 8), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"], wraplength=340, justify="left").pack(anchor="w", pady=(0, 10))
+            self.resp_combo.pack(fill="x", pady=(2, 10))
 
-        # 3. Peso (kg)
-        self.create_label(form_frame, "Peso (kg) aprovechado")
-        
+        # 3. Proceso de transformación
+        self.create_label(form_frame, "Proceso de transformación")
+
         if ctk:
-            self.peso_entry = ctk.CTkEntry(
+            self.proc_combo = ctk.CTkOptionMenu(
                 form_frame,
-                placeholder_text="Ej. 2.5",
+                values=PROCESOS,
+                height=35,
+                fg_color=COLORS["surface_lowest"],
+                button_color=COLORS["surface_lowest"],
+                button_hover_color=COLORS["outline_variant"],
+                dropdown_fg_color=COLORS["surface_container"],
+                dropdown_hover_color=COLORS["outline_variant"],
+                text_color=COLORS["on_surface"]
+            )
+            self.proc_combo.set(PROCESOS[0])
+            self.proc_combo.pack(fill="x", pady=(2, 15))
+        else:
+            self.proc_var = tk.StringVar(value=PROCESOS[0])
+            self.proc_combo = tk.OptionMenu(form_frame, self.proc_var, *PROCESOS)
+            self.proc_combo.config(
+                bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
+                activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
+                highlightthickness=0, bd=0
+            )
+            self.proc_combo.pack(fill="x", pady=(2, 10))
+
+        # 4. Peso de entrada (kg)
+        self.create_label(form_frame, "Peso de entrada (kg) — PET a transformar")
+
+        if ctk:
+            self.entrada_entry = ctk.CTkEntry(
+                form_frame,
+                placeholder_text="Ej. 5.0",
                 height=35,
                 fg_color=COLORS["surface_lowest"],
                 border_color=COLORS["outline_variant"],
                 text_color=COLORS["on_surface"],
                 font=(FONT_FAMILY, 13)
             )
-            self.peso_entry.pack(fill="x", pady=(2, 15))
+            self.entrada_entry.pack(fill="x", pady=(2, 15))
         else:
-            self.peso_entry = tk.Entry(
+            self.entrada_entry = tk.Entry(
                 form_frame,
                 bg=COLORS["surface_lowest"],
                 fg=COLORS["on_surface"],
@@ -187,15 +212,40 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
                 relief="flat",
                 font=(FONT_FAMILY, 12)
             )
-            self.peso_entry.pack(fill="x", pady=(2, 10), ipady=5)
+            self.entrada_entry.pack(fill="x", pady=(2, 10), ipady=5)
 
-        # 4. Observaciones
+        # 5. Peso de salida (kg)
+        self.create_label(form_frame, "Peso de salida (kg) — material obtenido")
+
+        if ctk:
+            self.salida_entry = ctk.CTkEntry(
+                form_frame,
+                placeholder_text="Ej. 4.2",
+                height=35,
+                fg_color=COLORS["surface_lowest"],
+                border_color=COLORS["outline_variant"],
+                text_color=COLORS["on_surface"],
+                font=(FONT_FAMILY, 13)
+            )
+            self.salida_entry.pack(fill="x", pady=(2, 15))
+        else:
+            self.salida_entry = tk.Entry(
+                form_frame,
+                bg=COLORS["surface_lowest"],
+                fg=COLORS["on_surface"],
+                insertbackground=COLORS["on_surface"],
+                relief="flat",
+                font=(FONT_FAMILY, 12)
+            )
+            self.salida_entry.pack(fill="x", pady=(2, 10), ipady=5)
+
+        # 6. Observaciones
         self.create_label(form_frame, "Observaciones")
-        
+
         if ctk:
             self.obs_textbox = ctk.CTkTextbox(
                 form_frame,
-                height=80,
+                height=70,
                 fg_color=COLORS["surface_lowest"],
                 border_color=COLORS["outline_variant"],
                 border_width=1,
@@ -208,7 +258,7 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
         else:
             self.obs_textbox = tk.Text(
                 form_frame,
-                height=4,
+                height=3,
                 width=1,  # el ancho real lo da fill="x"; evita el default de 80 columnas
                 bg=COLORS["surface_lowest"],
                 fg=COLORS["on_surface"],
@@ -219,11 +269,11 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
             )
             self.obs_textbox.pack(fill="x", pady=(2, 15), ipady=4)
 
-        # 5. Botón Registrar
+        # 7. Botón Registrar
         if ctk:
             btn_registrar = ctk.CTkButton(
                 form_frame,
-                text="Registrar PET",
+                text="Registrar Transformación",
                 font=(FONT_FAMILY, 14, "bold"),
                 height=45,
                 fg_color=COLORS["success"],
@@ -234,7 +284,7 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
             )
             btn_registrar.pack(fill="x")
         else:
-            tk.Button(form_frame, text="Registrar PET", bg=COLORS["success"], fg=COLORS["white"], command=self.registrar).pack(fill="x")
+            tk.Button(form_frame, text="Registrar Transformación", bg=COLORS["success"], fg=COLORS["white"], command=self.registrar).pack(fill="x")
 
     def create_label(self, parent, text):
         if ctk:
@@ -250,61 +300,84 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
 
     def registrar(self):
         fecha = self.date_entry.get()
-        estudiante = self.student_combo.get() if ctk else self.student_var.get()
-        peso = self.peso_entry.get()
+        responsable = self.resp_combo.get() if ctk else self.resp_var.get()
+        proceso = self.proc_combo.get() if ctk else self.proc_var.get()
+        entrada = self.entrada_entry.get()
+        salida = self.salida_entry.get()
 
         obs = self.obs_textbox.get("1.0", "end-1c")
         if obs.strip() == "Opcional...":
             obs = ""
 
-        if not peso.strip():
-            messagebox.showwarning("Error", "Debe ingresar el peso aprovechado.")
-            return
-            
-        try:
-            float(peso)
-        except ValueError:
-            messagebox.showwarning("Error", "El peso debe ser un número válido.")
-            return
-            
-        if estudiante == "Seleccione estudiante...":
-            messagebox.showwarning("Error", "Debe seleccionar un estudiante.")
+        if responsable == RESPONSABLES[0]:
+            messagebox.showwarning("Error", "Debe seleccionar un responsable.")
             return
 
-        msg = f"Registro Exitoso:\n\nFecha: {fecha}\nEstudiante: {estudiante}\nPeso: {peso} kg\nObservaciones: {obs}"
-        messagebox.showinfo("Recolección Registrada", msg)
-        
+        if proceso == PROCESOS[0]:
+            messagebox.showwarning("Error", "Debe seleccionar el proceso de transformación.")
+            return
+
+        if not entrada.strip() or not salida.strip():
+            messagebox.showwarning("Error", "Debe ingresar el peso de entrada y de salida.")
+            return
+
+        try:
+            entrada_val = float(entrada)
+            salida_val = float(salida)
+        except ValueError:
+            messagebox.showwarning("Error", "Los pesos deben ser números válidos.")
+            return
+
+        if entrada_val <= 0 or salida_val <= 0:
+            messagebox.showwarning("Error", "Los pesos deben ser mayores que cero.")
+            return
+
+        if salida_val > entrada_val:
+            messagebox.showwarning("Error", "El peso de salida no puede ser mayor que el de entrada.")
+            return
+
+        rendimiento = f"{(salida_val / entrada_val) * 100:.1f}%"
+
+        msg = (f"Transformación Registrada:\n\n"
+               f"Fecha: {fecha}\nResponsable: {responsable}\nProceso: {proceso}\n"
+               f"Entrada: {entrada_val} kg\nSalida: {salida_val} kg\nRendimiento: {rendimiento}\n"
+               f"Observaciones: {obs}")
+        messagebox.showinfo("Transformación Registrada", msg)
+
         if self.on_register_callback:
-            self.on_register_callback(fecha, estudiante, peso, obs)
-            
-        self.peso_entry.delete(0, 'end')
+            self.on_register_callback(fecha, responsable, proceso, entrada, salida, rendimiento, obs)
+
+        self.entrada_entry.delete(0, 'end')
+        self.salida_entry.delete(0, 'end')
         self.obs_textbox.delete("1.0", "end")
         self.obs_textbox.insert("1.0", "Opcional...")
         if ctk:
-            self.student_combo.set("Seleccione estudiante...")
+            self.resp_combo.set(RESPONSABLES[0])
+            self.proc_combo.set(PROCESOS[0])
         else:
-            self.student_var.set("Seleccione estudiante...")
+            self.resp_var.set(RESPONSABLES[0])
+            self.proc_var.set(PROCESOS[0])
 
 
-class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
+class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
     def __init__(self, parent, **kwargs):
         if ctk:
             super().__init__(parent, fg_color=COLORS["surface_container"], border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12, **kwargs)
         else:
             super().__init__(parent, bg=COLORS["surface_container"], bd=1, relief="solid", **kwargs)
-            
+
         self.setup_ui()
 
     def setup_ui(self):
         if ctk:
-            title = ctk.CTkLabel(self, text="Últimos Registros", font=(FONT_FAMILY, 18, "bold"), text_color=COLORS["primary_fixed"])
+            title = ctk.CTkLabel(self, text="Últimas Transformaciones", font=(FONT_FAMILY, 18, "bold"), text_color=COLORS["primary_fixed"])
             title.pack(pady=(20, 15), padx=20, anchor="w")
         else:
-            tk.Label(self, text="Últimos Registros", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15), padx=20, anchor="w")
+            tk.Label(self, text="Últimas Transformaciones", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15), padx=20, anchor="w")
 
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Recent.Treeview",
+        style.configure("Transf.Treeview",
                         background=COLORS["surface"],
                         foreground=COLORS["on_surface"],
                         rowheight=35,
@@ -312,13 +385,13 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
                         bordercolor=COLORS["outline_variant"],
                         borderwidth=0,
                         font=(FONT_FAMILY, 11))
-        style.map('Recent.Treeview', background=[('selected', COLORS["surface_low"])])
-        style.configure("Recent.Treeview.Heading",
+        style.map('Transf.Treeview', background=[('selected', COLORS["surface_low"])])
+        style.configure("Transf.Treeview.Heading",
                         background=COLORS["surface_high"],
                         foreground=COLORS["on_surface_variant"],
                         relief="flat",
                         font=(FONT_FAMILY, 11, "bold"))
-        style.map("Recent.Treeview.Heading", background=[('active', COLORS["surface_bright"])])
+        style.map("Transf.Treeview.Heading", background=[('active', COLORS["surface_bright"])])
 
         tree_frame = tk.Frame(self, bg=COLORS["surface_container"])
         tree_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
@@ -326,37 +399,43 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "estudiante", "peso", "observaciones")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Recent.Treeview", yscrollcommand=tree_scroll.set)
-        
+        columns = ("fecha", "responsable", "proceso", "entrada", "salida", "rendimiento", "observaciones")
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Transf.Treeview", yscrollcommand=tree_scroll.set)
+
         self.tree.heading("fecha", text="Fecha")
-        self.tree.heading("estudiante", text="Estudiante")
-        self.tree.heading("peso", text="Peso (kg)")
+        self.tree.heading("responsable", text="Responsable")
+        self.tree.heading("proceso", text="Proceso")
+        self.tree.heading("entrada", text="Entrada (kg)")
+        self.tree.heading("salida", text="Salida (kg)")
+        self.tree.heading("rendimiento", text="Rendimiento")
         self.tree.heading("observaciones", text="Observaciones")
 
-        self.tree.column("fecha", width=120, anchor="center", stretch=True)
-        self.tree.column("estudiante", width=200, anchor="w", stretch=True)
-        self.tree.column("peso", width=120, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=350, anchor="w", stretch=True)
+        self.tree.column("fecha", width=100, anchor="center", stretch=True)
+        self.tree.column("responsable", width=130, anchor="w", stretch=True)
+        self.tree.column("proceso", width=170, anchor="w", stretch=True)
+        self.tree.column("entrada", width=100, anchor="center", stretch=True)
+        self.tree.column("salida", width=100, anchor="center", stretch=True)
+        self.tree.column("rendimiento", width=100, anchor="center", stretch=True)
+        self.tree.column("observaciones", width=220, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
         # Datos de prueba iniciales
-        self.insert_record("07/08/2026", "Arnaldo", "2.5", "Botellas limpias")
-        self.insert_record("07/08/2026", "María", "1.2", "")
-        self.insert_record("06/08/2026", "Juan", "5.0", "Incluye tapas")
+        self.insert_record("07/08/2026", "Arnaldo", "Triturado (hojuelas)", "5.0", "4.6", "92.0%", "Lote de botellas limpias")
+        self.insert_record("06/08/2026", "María", "Extrusión a filamento", "4.6", "3.9", "84.8%", "Filamento 1.75mm")
+        self.insert_record("05/08/2026", "Juan", "Peletizado", "3.9", "3.7", "94.9%", "")
 
-    def insert_record(self, fecha, estudiante, peso, obs):
-        self.tree.insert("", "0", values=(fecha, estudiante, peso, obs))
+    def insert_record(self, fecha, responsable, proceso, entrada, salida, rendimiento, obs):
+        self.tree.insert("", "0", values=(fecha, responsable, proceso, entrada, salida, rendimiento, obs))
 
 
-class RecoleccionesApp:
+class TransformacionApp:
     def __init__(self, root, on_navigate=None, on_logout=None):
         self.root = root
         self.on_navigate = on_navigate
         self.on_logout = on_logout
-        self.root.title("VorTrack - Recolecciones")
+        self.root.title("VorTrack - Transformación")
         self.root.minsize(1024, 700)
         ui_utils.maximize_window(self.root)
         self.root.configure(bg=COLORS["background"])
@@ -394,7 +473,6 @@ class RecoleccionesApp:
         navbar_outer.pack(fill="x", side="top")
         navbar_outer.pack_propagate(False)
 
-        # Bottom Border
         border_bottom = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)
         border_bottom.pack(fill="x", side="top")
 
@@ -405,7 +483,6 @@ class RecoleccionesApp:
         brand_frame = tk.Frame(navbar_content, bg=COLORS["surface_container"])
         brand_frame.pack(side="left")
 
-        # Navbar Icon
         self.nav_icon_img = self.load_ctk_image(self.icon_path, size=(38, 38))
         if self.nav_icon_img:
             if ctk:
@@ -544,19 +621,19 @@ class RecoleccionesApp:
         self.canvas_frame.pack(fill="both", expand=True, padx=40, pady=20)
 
         # grid con anchos deterministas: el formulario a la izquierda (ancho fijo)
-        # y el panel de registros ocupando el resto. Evita que el form invada la derecha.
+        # y el panel de registros ocupando el resto.
         self.canvas_frame.grid_rowconfigure(0, weight=1)
         self.canvas_frame.grid_columnconfigure(0, weight=0, minsize=440)
         self.canvas_frame.grid_columnconfigure(1, weight=1)
 
-        self.form = RecoleccionesForm(self.canvas_frame, on_register_callback=self.on_new_record)
+        self.form = TransformacionForm(self.canvas_frame, on_register_callback=self.on_new_record)
         self.form.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
 
-        self.recent_records = RecentRecordsFrame(self.canvas_frame)
+        self.recent_records = RecentTransformacionesFrame(self.canvas_frame)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
-    def on_new_record(self, fecha, estudiante, peso, obs):
-        self.recent_records.insert_record(fecha, estudiante, peso, obs)
+    def on_new_record(self, fecha, responsable, proceso, entrada, salida, rendimiento, obs):
+        self.recent_records.insert_record(fecha, responsable, proceso, entrada, salida, rendimiento, obs)
 
     def build_footer(self):
         border_top = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)
@@ -600,13 +677,12 @@ class RecoleccionesApp:
             self.registrar_btn.set("REGISTRAR ▾")
 
         if choice == "Recolección":
-            # Ya estamos en la página de recolecciones.
-            return
-        if choice == "Transformación":
             if self.on_navigate:
-                self.on_navigate("transformacion")
+                self.on_navigate("recoleccion")
+        elif choice == "Transformación":
+            # Ya estamos en la página de transformación.
             return
-        if choice == "Impresión":
+        elif choice == "Impresión":
             messagebox.showinfo("Impresión", "El módulo de Impresión estará disponible próximamente.")
 
     def logout(self):
@@ -617,6 +693,7 @@ class RecoleccionesApp:
                 auth.logout()
                 self.root.destroy()
 
+
 def main():
     auth.require_auth()
 
@@ -624,9 +701,10 @@ def main():
         root = ctk.CTk()
     else:
         root = tk.Tk()
-        
-    RecoleccionesApp(root)
+
+    TransformacionApp(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     try:

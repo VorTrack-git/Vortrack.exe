@@ -7,6 +7,7 @@ import auth
 import inicio_ui
 import login_ui
 import recolec_ui
+import transformacion_ui
 
 try:
     import customtkinter as ctk
@@ -64,6 +65,8 @@ def show_main_app(page: str = "inicio") -> str:
 
     if page == "recoleccion":
         recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout)
+    elif page == "transformacion":
+        transformacion_ui.TransformacionApp(root, on_navigate=navigate, on_logout=on_logout)
     else:
         inicio_ui.VorTrackApp(root, on_navigate=navigate, on_logout=on_logout)
 
@@ -90,7 +93,7 @@ def run():
         page = "inicio"
         while True:
             action = show_main_app(page)
-            if action in ("inicio", "recoleccion"):
+            if action in ("inicio", "recoleccion", "transformacion"):
                 page = action
                 continue
             if action == "logout":

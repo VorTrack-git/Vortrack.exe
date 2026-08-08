@@ -559,13 +559,14 @@ class VorTrackApp:
         if hasattr(self, "registrar_btn") and ctk:
             self.registrar_btn.set("REGISTRAR ▾")
 
-        if choice == "Recolección":
+        destinos = {"Recolección": "recoleccion", "Transformación": "transformacion"}
+        if choice in destinos:
             if self.on_navigate:
-                self.on_navigate("recoleccion")
+                self.on_navigate(destinos[choice])
             else:
-                messagebox.showinfo("Recolección", "El módulo de Recolección se abre desde la aplicación principal.")
-        elif choice in ("Transformación", "Impresión"):
-            messagebox.showinfo(choice, f"El módulo de {choice} estará disponible próximamente.")
+                messagebox.showinfo(choice, f"El módulo de {choice} se abre desde la aplicación principal.")
+        elif choice == "Impresión":
+            messagebox.showinfo("Impresión", "El módulo de Impresión estará disponible próximamente.")
 
     def explorar_sistema(self):
         if self.on_navigate:
