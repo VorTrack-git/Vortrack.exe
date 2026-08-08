@@ -490,7 +490,7 @@ class RecoleccionesApp:
                 font=(FONT_FAMILY, 11, "bold"),
                 height=32,
                 corner_radius=12,
-                command=lambda: print("Navigating to Histórico Informes")
+                command=self.ir_a_historico
             )
             btn_historico.pack(side="left", padx=10)
         else:
@@ -503,6 +503,7 @@ class RecoleccionesApp:
                 cursor="hand2"
             )
             lbl_historico.pack(side="left", padx=16)
+            lbl_historico.bind("<Button-1>", lambda _e: self.ir_a_historico())
 
         # Right Action: Logout Button
         if ctk:
@@ -602,12 +603,13 @@ class RecoleccionesApp:
         if choice == "Recolección":
             # Ya estamos en la página de recolecciones.
             return
-        if choice == "Transformación":
-            if self.on_navigate:
-                self.on_navigate("transformacion")
-            return
-        if choice == "Impresión":
-            messagebox.showinfo("Impresión", "El módulo de Impresión estará disponible próximamente.")
+        destinos = {"Transformación": "transformacion", "Impresión": "impresion"}
+        if choice in destinos and self.on_navigate:
+            self.on_navigate(destinos[choice])
+
+    def ir_a_historico(self):
+        if self.on_navigate:
+            self.on_navigate("historico")
 
     def logout(self):
         if messagebox.askyesno("Cerrar sesión", "¿Desea cerrar sesión en VorTrack?"):

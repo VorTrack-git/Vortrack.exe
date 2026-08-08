@@ -8,6 +8,8 @@ import inicio_ui
 import login_ui
 import recolec_ui
 import transformacion_ui
+import impresion_ui
+import historico_ui
 
 try:
     import customtkinter as ctk
@@ -67,6 +69,10 @@ def show_main_app(page: str = "inicio") -> str:
         recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout)
     elif page == "transformacion":
         transformacion_ui.TransformacionApp(root, on_navigate=navigate, on_logout=on_logout)
+    elif page == "impresion":
+        impresion_ui.ImpresionApp(root, on_navigate=navigate, on_logout=on_logout)
+    elif page == "historico":
+        historico_ui.HistoricoApp(root, on_navigate=navigate, on_logout=on_logout)
     else:
         inicio_ui.VorTrackApp(root, on_navigate=navigate, on_logout=on_logout)
 
@@ -93,7 +99,7 @@ def run():
         page = "inicio"
         while True:
             action = show_main_app(page)
-            if action in ("inicio", "recoleccion", "transformacion"):
+            if action in ("inicio", "recoleccion", "transformacion", "impresion", "historico"):
                 page = action
                 continue
             if action == "logout":

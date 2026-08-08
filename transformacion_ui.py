@@ -571,7 +571,7 @@ class TransformacionApp:
                 font=(FONT_FAMILY, 11, "bold"),
                 height=32,
                 corner_radius=12,
-                command=lambda: print("Navigating to Histórico Informes")
+                command=self.ir_a_historico
             )
             btn_historico.pack(side="left", padx=10)
         else:
@@ -584,6 +584,7 @@ class TransformacionApp:
                 cursor="hand2"
             )
             lbl_historico.pack(side="left", padx=16)
+            lbl_historico.bind("<Button-1>", lambda _e: self.ir_a_historico())
 
         # Right Action: Logout Button
         if ctk:
@@ -680,14 +681,16 @@ class TransformacionApp:
         if hasattr(self, "registrar_btn") and ctk:
             self.registrar_btn.set("REGISTRAR ▾")
 
-        if choice == "Recolección":
-            if self.on_navigate:
-                self.on_navigate("recoleccion")
-        elif choice == "Transformación":
+        if choice == "Transformación":
             # Ya estamos en la página de transformación.
             return
-        elif choice == "Impresión":
-            messagebox.showinfo("Impresión", "El módulo de Impresión estará disponible próximamente.")
+        destinos = {"Recolección": "recoleccion", "Impresión": "impresion"}
+        if choice in destinos and self.on_navigate:
+            self.on_navigate(destinos[choice])
+
+    def ir_a_historico(self):
+        if self.on_navigate:
+            self.on_navigate("historico")
 
     def logout(self):
         if messagebox.askyesno("Cerrar sesión", "¿Desea cerrar sesión en VorTrack?"):

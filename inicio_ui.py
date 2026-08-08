@@ -200,7 +200,7 @@ class VorTrackApp:
                 font=(FONT_FAMILY, 11, "bold"),
                 height=32,
                 corner_radius=12,
-                command=lambda: print("Navigating to Histórico Informes")
+                command=self.ir_a_historico
             )
             btn_historico.pack(side="left", padx=10)
         else:
@@ -213,6 +213,7 @@ class VorTrackApp:
                 cursor="hand2"
             )
             lbl_historico.pack(side="left", padx=16)
+            lbl_historico.bind("<Button-1>", lambda _e: self.ir_a_historico())
 
         # Right Action: Logout Button
         if ctk:
@@ -559,14 +560,18 @@ class VorTrackApp:
         if hasattr(self, "registrar_btn") and ctk:
             self.registrar_btn.set("REGISTRAR ▾")
 
-        destinos = {"Recolección": "recoleccion", "Transformación": "transformacion"}
+        destinos = {"Recolección": "recoleccion", "Transformación": "transformacion", "Impresión": "impresion"}
         if choice in destinos:
             if self.on_navigate:
                 self.on_navigate(destinos[choice])
             else:
                 messagebox.showinfo(choice, f"El módulo de {choice} se abre desde la aplicación principal.")
-        elif choice == "Impresión":
-            messagebox.showinfo("Impresión", "El módulo de Impresión estará disponible próximamente.")
+
+    def ir_a_historico(self):
+        if self.on_navigate:
+            self.on_navigate("historico")
+        else:
+            messagebox.showinfo("Histórico e Informes", "Disponible desde la aplicación principal.")
 
     def explorar_sistema(self):
         if self.on_navigate:
