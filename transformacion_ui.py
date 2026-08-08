@@ -46,11 +46,11 @@ COLORS = {
 FONT_FAMILY = "Segoe UI"
 
 RESPONSABLES = ["Seleccione responsable...", "Arnaldo", "Miguel", "Juan", "María"]
-PROCESOS = ["Seleccione proceso...", "Triturado (hojuelas)", "Lavado y secado",
-            "Extrusión a filamento", "Peletizado", "Moldeado / Laminado"]
 
 
 class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
+    """Formulario para registrar la producción de filamento 3D a partir de PET (extrusión)."""
+
     def __init__(self, parent, on_register_callback=None, **kwargs):
         self.on_register_callback = on_register_callback
         if ctk:
@@ -64,9 +64,12 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
         # Título
         if ctk:
             title = ctk.CTkLabel(self, text="Nueva Transformación", font=(FONT_FAMILY, 20, "bold"), text_color=COLORS["primary_fixed"])
-            title.pack(pady=(25, 20))
+            title.pack(pady=(25, 4))
+            sub = ctk.CTkLabel(self, text="Producción de filamento 3D (extrusión de PET)", font=(FONT_FAMILY, 11), text_color=COLORS["on_surface_variant"])
+            sub.pack(pady=(0, 16))
         else:
-            tk.Label(self, text="Nueva Transformación", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15))
+            tk.Label(self, text="Nueva Transformación", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 2))
+            tk.Label(self, text="Producción de filamento 3D (extrusión de PET)", font=(FONT_FAMILY, 9), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(pady=(0, 12))
 
         # Contenedor del formulario
         if ctk:
@@ -162,84 +165,26 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             )
             self.resp_combo.pack(fill="x", pady=(2, 10))
 
-        # 3. Proceso de transformación
-        self.create_label(form_frame, "Proceso de transformación")
+        # 3. Peso ingresado (kg)
+        self.create_label(form_frame, "Peso ingresado (kg) — PET")
+        self.ingresado_entry = self._make_entry(form_frame, "Ej. 2.0")
+        self.ingresado_entry.bind("<KeyRelease>", self._update_desperdicio)
 
-        if ctk:
-            self.proc_combo = ctk.CTkOptionMenu(
-                form_frame,
-                values=PROCESOS,
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"],
-                dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"]
-            )
-            self.proc_combo.set(PROCESOS[0])
-            self.proc_combo.pack(fill="x", pady=(2, 15))
-        else:
-            self.proc_var = tk.StringVar(value=PROCESOS[0])
-            self.proc_combo = tk.OptionMenu(form_frame, self.proc_var, *PROCESOS)
-            self.proc_combo.config(
-                bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                highlightthickness=0, bd=0
-            )
-            self.proc_combo.pack(fill="x", pady=(2, 10))
+        # 4. Peso salido (kg)
+        self.create_label(form_frame, "Peso salido (kg) — filamento")
+        self.salido_entry = self._make_entry(form_frame, "Ej. 1.7")
+        self.salido_entry.bind("<KeyRelease>", self._update_desperdicio)
 
-        # 4. Peso de entrada (kg)
-        self.create_label(form_frame, "Peso de entrada (kg) — PET a transformar")
+        # 5. Desperdicio (kg) — calculado automáticamente (ingresado - salido)
+        self.create_label(form_frame, "Desperdicio (kg) — automático")
+        self.desperdicio_entry = self._make_entry(form_frame, "")
+        self._set_readonly(self.desperdicio_entry, "—")
 
-        if ctk:
-            self.entrada_entry = ctk.CTkEntry(
-                form_frame,
-                placeholder_text="Ej. 5.0",
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 13)
-            )
-            self.entrada_entry.pack(fill="x", pady=(2, 15))
-        else:
-            self.entrada_entry = tk.Entry(
-                form_frame,
-                bg=COLORS["surface_lowest"],
-                fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"],
-                relief="flat",
-                font=(FONT_FAMILY, 12)
-            )
-            self.entrada_entry.pack(fill="x", pady=(2, 10), ipady=5)
+        # 6. Metros de filamento producidos
+        self.create_label(form_frame, "Metros de filamento producidos")
+        self.metros_entry = self._make_entry(form_frame, "Ej. 560")
 
-        # 5. Peso de salida (kg)
-        self.create_label(form_frame, "Peso de salida (kg) — material obtenido")
-
-        if ctk:
-            self.salida_entry = ctk.CTkEntry(
-                form_frame,
-                placeholder_text="Ej. 4.2",
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 13)
-            )
-            self.salida_entry.pack(fill="x", pady=(2, 15))
-        else:
-            self.salida_entry = tk.Entry(
-                form_frame,
-                bg=COLORS["surface_lowest"],
-                fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"],
-                relief="flat",
-                font=(FONT_FAMILY, 12)
-            )
-            self.salida_entry.pack(fill="x", pady=(2, 10), ipady=5)
-
-        # 6. Observaciones
+        # 7. Observaciones
         self.create_label(form_frame, "Observaciones")
 
         if ctk:
@@ -269,11 +214,11 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             )
             self.obs_textbox.pack(fill="x", pady=(2, 15), ipady=4)
 
-        # 7. Botón Registrar
+        # 8. Botón Registrar
         if ctk:
             btn_registrar = ctk.CTkButton(
                 form_frame,
-                text="Registrar Transformación",
+                text="Registrar Filamento",
                 font=(FONT_FAMILY, 14, "bold"),
                 height=45,
                 fg_color=COLORS["success"],
@@ -284,7 +229,51 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             )
             btn_registrar.pack(fill="x")
         else:
-            tk.Button(form_frame, text="Registrar Transformación", bg=COLORS["success"], fg=COLORS["white"], command=self.registrar).pack(fill="x")
+            tk.Button(form_frame, text="Registrar Filamento", bg=COLORS["success"], fg=COLORS["white"], command=self.registrar).pack(fill="x")
+
+    def _make_entry(self, parent, placeholder):
+        """Crea un campo de texto (ctk o tk) con el estilo del formulario."""
+        if ctk:
+            entry = ctk.CTkEntry(
+                parent,
+                placeholder_text=placeholder,
+                height=35,
+                fg_color=COLORS["surface_lowest"],
+                border_color=COLORS["outline_variant"],
+                text_color=COLORS["on_surface"],
+                font=(FONT_FAMILY, 13)
+            )
+            entry.pack(fill="x", pady=(2, 15))
+        else:
+            entry = tk.Entry(
+                parent,
+                bg=COLORS["surface_lowest"],
+                fg=COLORS["on_surface"],
+                insertbackground=COLORS["on_surface"],
+                relief="flat",
+                font=(FONT_FAMILY, 12),
+                readonlybackground=COLORS["surface_low"]
+            )
+            entry.pack(fill="x", pady=(2, 10), ipady=5)
+        return entry
+
+    def _set_readonly(self, entry, text):
+        """Escribe un valor en un campo y lo deja de solo lectura."""
+        entry.configure(state="normal")
+        entry.delete(0, "end")
+        entry.insert(0, text)
+        entry.configure(state="disabled" if ctk else "readonly")
+
+    def _update_desperdicio(self, event=None):
+        """Recalcula el desperdicio en vivo a partir del peso ingresado y salido."""
+        try:
+            ingresado = float(self.ingresado_entry.get())
+            salido = float(self.salido_entry.get())
+            desperdicio = ingresado - salido
+            texto = f"{desperdicio:.2f}" if desperdicio >= 0 else "—"
+        except ValueError:
+            texto = "—"
+        self._set_readonly(self.desperdicio_entry, texto)
 
     def create_label(self, parent, text):
         if ctk:
@@ -301,9 +290,9 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
     def registrar(self):
         fecha = self.date_entry.get()
         responsable = self.resp_combo.get() if ctk else self.resp_var.get()
-        proceso = self.proc_combo.get() if ctk else self.proc_var.get()
-        entrada = self.entrada_entry.get()
-        salida = self.salida_entry.get()
+        ingresado = self.ingresado_entry.get()
+        salido = self.salido_entry.get()
+        metros = self.metros_entry.get()
 
         obs = self.obs_textbox.get("1.0", "end-1c")
         if obs.strip() == "Opcional...":
@@ -313,50 +302,65 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             messagebox.showwarning("Error", "Debe seleccionar un responsable.")
             return
 
-        if proceso == PROCESOS[0]:
-            messagebox.showwarning("Error", "Debe seleccionar el proceso de transformación.")
-            return
-
-        if not entrada.strip() or not salida.strip():
-            messagebox.showwarning("Error", "Debe ingresar el peso de entrada y de salida.")
+        if not ingresado.strip() or not salido.strip():
+            messagebox.showwarning("Error", "Debe ingresar el peso ingresado y el peso salido.")
             return
 
         try:
-            entrada_val = float(entrada)
-            salida_val = float(salida)
+            ingresado_val = float(ingresado)
+            salido_val = float(salido)
         except ValueError:
             messagebox.showwarning("Error", "Los pesos deben ser números válidos.")
             return
 
-        if entrada_val <= 0 or salida_val <= 0:
+        if ingresado_val <= 0 or salido_val <= 0:
             messagebox.showwarning("Error", "Los pesos deben ser mayores que cero.")
             return
 
-        if salida_val > entrada_val:
-            messagebox.showwarning("Error", "El peso de salida no puede ser mayor que el de entrada.")
+        if salido_val > ingresado_val:
+            messagebox.showwarning("Error", "El peso salido no puede ser mayor que el ingresado.")
             return
 
-        rendimiento = f"{(salida_val / entrada_val) * 100:.1f}%"
+        if not metros.strip():
+            messagebox.showwarning("Error", "Debe ingresar los metros de filamento producidos.")
+            return
 
-        msg = (f"Transformación Registrada:\n\n"
-               f"Fecha: {fecha}\nResponsable: {responsable}\nProceso: {proceso}\n"
-               f"Entrada: {entrada_val} kg\nSalida: {salida_val} kg\nRendimiento: {rendimiento}\n"
+        try:
+            metros_val = float(metros)
+        except ValueError:
+            messagebox.showwarning("Error", "Los metros deben ser un número válido.")
+            return
+
+        if metros_val <= 0:
+            messagebox.showwarning("Error", "Los metros deben ser mayores que cero.")
+            return
+
+        desperdicio_val = ingresado_val - salido_val
+
+        msg = (f"Filamento Registrado:\n\n"
+               f"Fecha: {fecha}\nResponsable: {responsable}\n"
+               f"Peso ingresado: {ingresado_val} kg\nPeso salido: {salido_val} kg\n"
+               f"Desperdicio: {desperdicio_val:.2f} kg\nMetros producidos: {metros_val} m\n"
                f"Observaciones: {obs}")
         messagebox.showinfo("Transformación Registrada", msg)
 
         if self.on_register_callback:
-            self.on_register_callback(fecha, responsable, proceso, entrada, salida, rendimiento, obs)
+            self.on_register_callback(
+                fecha, responsable,
+                f"{ingresado_val:.2f}", f"{salido_val:.2f}",
+                f"{desperdicio_val:.2f}", f"{metros_val:g}", obs
+            )
 
-        self.entrada_entry.delete(0, 'end')
-        self.salida_entry.delete(0, 'end')
+        self.ingresado_entry.delete(0, 'end')
+        self.salido_entry.delete(0, 'end')
+        self.metros_entry.delete(0, 'end')
+        self._set_readonly(self.desperdicio_entry, "—")
         self.obs_textbox.delete("1.0", "end")
         self.obs_textbox.insert("1.0", "Opcional...")
         if ctk:
             self.resp_combo.set(RESPONSABLES[0])
-            self.proc_combo.set(PROCESOS[0])
         else:
             self.resp_var.set(RESPONSABLES[0])
-            self.proc_var.set(PROCESOS[0])
 
 
 class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
@@ -370,10 +374,10 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
 
     def setup_ui(self):
         if ctk:
-            title = ctk.CTkLabel(self, text="Últimas Transformaciones", font=(FONT_FAMILY, 18, "bold"), text_color=COLORS["primary_fixed"])
+            title = ctk.CTkLabel(self, text="Historial de Filamento", font=(FONT_FAMILY, 18, "bold"), text_color=COLORS["primary_fixed"])
             title.pack(pady=(20, 15), padx=20, anchor="w")
         else:
-            tk.Label(self, text="Últimas Transformaciones", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15), padx=20, anchor="w")
+            tk.Label(self, text="Historial de Filamento", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15), padx=20, anchor="w")
 
         style = ttk.Style()
         style.theme_use("default")
@@ -399,35 +403,35 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "responsable", "proceso", "entrada", "salida", "rendimiento", "observaciones")
+        columns = ("fecha", "responsable", "ingresado", "salido", "desperdicio", "metros", "observaciones")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Transf.Treeview", yscrollcommand=tree_scroll.set)
 
         self.tree.heading("fecha", text="Fecha")
         self.tree.heading("responsable", text="Responsable")
-        self.tree.heading("proceso", text="Proceso")
-        self.tree.heading("entrada", text="Entrada (kg)")
-        self.tree.heading("salida", text="Salida (kg)")
-        self.tree.heading("rendimiento", text="Rendimiento")
+        self.tree.heading("ingresado", text="Ingresado (kg)")
+        self.tree.heading("salido", text="Salido (kg)")
+        self.tree.heading("desperdicio", text="Desperdicio (kg)")
+        self.tree.heading("metros", text="Metros (m)")
         self.tree.heading("observaciones", text="Observaciones")
 
         self.tree.column("fecha", width=100, anchor="center", stretch=True)
-        self.tree.column("responsable", width=130, anchor="w", stretch=True)
-        self.tree.column("proceso", width=170, anchor="w", stretch=True)
-        self.tree.column("entrada", width=100, anchor="center", stretch=True)
-        self.tree.column("salida", width=100, anchor="center", stretch=True)
-        self.tree.column("rendimiento", width=100, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=220, anchor="w", stretch=True)
+        self.tree.column("responsable", width=120, anchor="w", stretch=True)
+        self.tree.column("ingresado", width=110, anchor="center", stretch=True)
+        self.tree.column("salido", width=100, anchor="center", stretch=True)
+        self.tree.column("desperdicio", width=120, anchor="center", stretch=True)
+        self.tree.column("metros", width=100, anchor="center", stretch=True)
+        self.tree.column("observaciones", width=200, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
         # Datos de prueba iniciales
-        self.insert_record("07/08/2026", "Arnaldo", "Triturado (hojuelas)", "5.0", "4.6", "92.0%", "Lote de botellas limpias")
-        self.insert_record("06/08/2026", "María", "Extrusión a filamento", "4.6", "3.9", "84.8%", "Filamento 1.75mm")
-        self.insert_record("05/08/2026", "Juan", "Peletizado", "3.9", "3.7", "94.9%", "")
+        self.insert_record("07/08/2026", "Arnaldo", "2.00", "1.70", "0.30", "560", "Filamento translúcido")
+        self.insert_record("06/08/2026", "María", "2.50", "2.10", "0.40", "690", "Buen acabado")
+        self.insert_record("05/08/2026", "Juan", "3.00", "2.40", "0.60", "790", "")
 
-    def insert_record(self, fecha, responsable, proceso, entrada, salida, rendimiento, obs):
-        self.tree.insert("", "0", values=(fecha, responsable, proceso, entrada, salida, rendimiento, obs))
+    def insert_record(self, fecha, responsable, ingresado, salido, desperdicio, metros, obs):
+        self.tree.insert("", "0", values=(fecha, responsable, ingresado, salido, desperdicio, metros, obs))
 
 
 class TransformacionApp:
@@ -632,8 +636,8 @@ class TransformacionApp:
         self.recent_records = RecentTransformacionesFrame(self.canvas_frame)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
-    def on_new_record(self, fecha, responsable, proceso, entrada, salida, rendimiento, obs):
-        self.recent_records.insert_record(fecha, responsable, proceso, entrada, salida, rendimiento, obs)
+    def on_new_record(self, fecha, responsable, ingresado, salido, desperdicio, metros, obs):
+        self.recent_records.insert_record(fecha, responsable, ingresado, salido, desperdicio, metros, obs)
 
     def build_footer(self):
         border_top = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)
