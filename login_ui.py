@@ -20,6 +20,8 @@ COLORS = {
     "background": "#051424",
     "surface": "#0d1117",              # For input fields
     "surface_container": "#122131",    # Glass panel simulation
+    "surface_high": "#1c2b3c",
+    "surface_bright": "#2c3a4c",
     "primary": "#dbfcff",
     "primary_fixed": "#7df4ff",
     "primary_container": "#00f0ff",
@@ -94,7 +96,7 @@ class LoginApp:
         # LOGIN CARD
         # ---------------------------------------------------------
         card_width = 480
-        card_height = 590 if ctk else 700
+        card_height = 540 if ctk else 650
         
         if ctk:
             self.card = ctk.CTkFrame(
@@ -186,8 +188,11 @@ class LoginApp:
 
             pass_lbl = ctk.CTkLabel(form_frame, text="CREDENCIAL DE ACCESO", font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"])
             pass_lbl.pack(anchor="w")
+
+            pass_row = ctk.CTkFrame(form_frame, fg_color="transparent")
+            pass_row.pack(fill="x", pady=(2, 10))
             self.pass_entry = ctk.CTkEntry(
-                form_frame,
+                pass_row,
                 placeholder_text="••••••••",
                 show="*",
                 height=45,
@@ -197,7 +202,20 @@ class LoginApp:
                 font=(FONT_FAMILY, 14),
                 corner_radius=8
             )
-            self.pass_entry.pack(fill="x", pady=(2, 10))
+            self.pass_entry.pack(side="left", fill="x", expand=True)
+            self.toggle_pass_btn = ctk.CTkButton(
+                pass_row,
+                text="Ver",
+                width=70,
+                height=45,
+                fg_color=COLORS["surface_high"],
+                hover_color=COLORS["surface_bright"],
+                text_color=COLORS["on_surface"],
+                font=(FONT_FAMILY, 12, "bold"),
+                corner_radius=8,
+                command=self._toggle_password
+            )
+            self.toggle_pass_btn.pack(side="left", padx=(8, 0))
 
             options_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
             options_frame.pack(fill="x", pady=(5, 20))
@@ -241,19 +259,7 @@ class LoginApp:
                 corner_radius=8,
                 command=self.login
             )
-            login_btn.pack(fill="x", pady=(10, 15))
-
-            status_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-            status_frame.pack(fill="x", pady=(0, 20))
-
-            status_inner = ctk.CTkFrame(status_frame, fg_color="transparent")
-            status_inner.pack()  # centrado horizontalmente
-
-            status_dot = ctk.CTkLabel(status_inner, text="●", font=(FONT_FAMILY, 18), text_color=COLORS["primary_fixed"])
-            status_dot.pack(side="left", padx=(0, 6))
-
-            status_txt = ctk.CTkLabel(status_inner, text="SISTEMA EN LÍNEA", font=(FONT_FAMILY, 11, "bold"), text_color=COLORS["on_surface_variant"])
-            status_txt.pack(side="left")
+            login_btn.pack(fill="x", pady=(10, 5))
             return
 
         user_lbl = tk.Label(form_frame, text="IDENTIFICADOR", font=(FONT_FAMILY, 12, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
@@ -263,8 +269,26 @@ class LoginApp:
 
         pass_lbl = tk.Label(form_frame, text="CREDENCIAL DE ACCESO", font=(FONT_FAMILY, 12, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
         pass_lbl.pack(anchor="w")
-        self.pass_entry = tk.Entry(form_frame, show="*", bg=COLORS["surface"], fg=COLORS["on_surface"], insertbackground=COLORS["on_surface"], font=(FONT_FAMILY, 14), relief="flat")
-        self.pass_entry.pack(fill="x", ipady=8, pady=(2, 10))
+
+        pass_row = tk.Frame(form_frame, bg=COLORS["surface_container"])
+        pass_row.pack(fill="x", pady=(2, 10))
+        self.pass_entry = tk.Entry(pass_row, show="*", bg=COLORS["surface"], fg=COLORS["on_surface"], insertbackground=COLORS["on_surface"], font=(FONT_FAMILY, 14), relief="flat")
+        self.pass_entry.pack(side="left", fill="x", expand=True, ipady=8)
+        self.toggle_pass_btn = tk.Button(
+            pass_row,
+            text="Ver",
+            bg=COLORS["surface_high"],
+            fg=COLORS["on_surface"],
+            activebackground=COLORS["surface_bright"],
+            activeforeground=COLORS["primary_fixed"],
+            font=(FONT_FAMILY, 11, "bold"),
+            relief="flat",
+            bd=0,
+            padx=14,
+            cursor="hand2",
+            command=self._toggle_password
+        )
+        self.toggle_pass_btn.pack(side="left", fill="y", padx=(8, 0))
 
         options_frame = tk.Frame(form_frame, bg=COLORS["surface_container"])
         options_frame.pack(fill="x", pady=(5, 20))
@@ -309,19 +333,13 @@ class LoginApp:
             cursor="hand2",
             command=self.login
         )
-        login_btn.pack(fill="x", ipady=10, pady=(10, 15))
+        login_btn.pack(fill="x", ipady=10, pady=(10, 5))
 
-        status_frame = tk.Frame(form_frame, bg=COLORS["surface_container"])
-        status_frame.pack(fill="x", pady=(0, 20))
-
-        status_inner = tk.Frame(status_frame, bg=COLORS["surface_container"])
-        status_inner.pack()  # centrado horizontalmente
-
-        status_dot = tk.Label(status_inner, text="●", font=(FONT_FAMILY, 18), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"])
-        status_dot.pack(side="left", padx=(0, 6))
-
-        status_txt = tk.Label(status_inner, text="SISTEMA EN LÍNEA", font=(FONT_FAMILY, 11, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"])
-        status_txt.pack(side="left")
+    def _toggle_password(self):
+        """Alterna entre mostrar y ocultar la contraseña."""
+        self.pass_visible = not getattr(self, "pass_visible", False)
+        self.pass_entry.configure(show="" if self.pass_visible else "*")
+        self.toggle_pass_btn.configure(text="Ocultar" if self.pass_visible else "Ver")
 
     def _load_remembered_user(self):
         remembered = auth.load_remembered_user()
