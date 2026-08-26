@@ -4,6 +4,7 @@ from tkinter import messagebox, ttk
 
 import auth
 import ui_utils
+import repositorio
 
 try:
     import customtkinter as ctk
@@ -14,24 +15,6 @@ from PIL import Image, ImageTk
 
 COLORS = ui_utils.COLORS
 FONT_FAMILY = ui_utils.FONT_FAMILY
-
-# Indicadores de ejemplo (en memoria, sin backend todavía).
-KPIS = [
-    ("PET recolectado", "12.5 kg", "🧴"),
-    ("Filamento producido", "9.8 kg", "🧵"),
-    ("Desperdicio", "2.7 kg", "♻"),
-    ("Objetos impresos", "24", "🖨"),
-    ("Estudiantes activos", "8", "👥"),
-    ("CO₂ evitado (est.)", "31 kg", "🌱"),
-]
-
-# Ranking de participación (gamificación).
-RANKING = [
-    ("1", "Arnaldo", "5.0", "8", "480"),
-    ("2", "María", "3.7", "6", "360"),
-    ("3", "Juan", "2.4", "6", "300"),
-    ("4", "Otros", "1.4", "4", "160"),
-]
 
 
 class HistoricoApp:
@@ -95,10 +78,27 @@ class HistoricoApp:
                       font=(FONT_FAMILY, 11, "bold"), bd=0, padx=20, pady=8, cursor="hand2",
                       command=self.generar_informe).pack(side="right")
 
+        # Indicadores calculados en vivo desde la base de datos
+        try:
+            k = repositorio.indicadores_resumen()
+        except Exception as exc:  # noqa: BLE001
+            k = {"pet_recolectado": 0, "filamento_producido": 0, "desperdicio": 0,
+                 "objetos_impresos": 0, "responsables": 0, "botellas": 0}
+            messagebox.showwarning("Base de datos", f"No se pudieron cargar los indicadores:\n{exc}")
+
+        kpis = [
+            ("PET recolectado", f"{k['pet_recolectado']:g} kg", "🧴"),
+            ("Filamento producido", f"{k['filamento_producido']:g} kg", "🧵"),
+            ("Desperdicio", f"{k['desperdicio']:.2f} kg", "♻"),
+            ("Objetos impresos", str(k['objetos_impresos']), "🖨"),
+            ("Responsables", str(k['responsables']), "👥"),
+            ("Botellas recolectadas", str(k['botellas']), "🍾"),
+        ]
+
         # Fila de indicadores (KPIs)
         kpi_row = tk.Frame(outer, bg=COLORS["background"])
         kpi_row.pack(fill="x", pady=(0, 20))
-        for titulo, valor, icono in KPIS:
+        for titulo, valor, icono in kpis:
             self._kpi_card(kpi_row, titulo, valor, icono)
 
         # Panel de ranking (gamificación)
@@ -155,23 +155,32 @@ class HistoricoApp:
         scroll = ttk.Scrollbar(tree_frame)
         scroll.pack(side="right", fill="y")
 
-        cols = ("puesto", "estudiante", "pet", "impresiones", "puntos")
+        cols = ("puesto", "estudiante", "pet", "jornadas", "botellas", "puntos")
         tree = ttk.Treeview(tree_frame, columns=cols, show="headings", style="Hist.Treeview", yscrollcommand=scroll.set)
         tree.heading("puesto", text="Puesto")
         tree.heading("estudiante", text="Estudiante")
         tree.heading("pet", text="PET aportado (kg)")
-        tree.heading("impresiones", text="Impresiones")
+        tree.heading("jornadas", text="Jornadas")
+        tree.heading("botellas", text="Botellas")
         tree.heading("puntos", text="Puntos")
-        tree.column("puesto", width=90, anchor="center", stretch=True)
+        tree.column("puesto", width=80, anchor="center", stretch=True)
         tree.column("estudiante", width=220, anchor="w", stretch=True)
-        tree.column("pet", width=180, anchor="center", stretch=True)
-        tree.column("impresiones", width=140, anchor="center", stretch=True)
-        tree.column("puntos", width=140, anchor="center", stretch=True)
+        tree.column("pet", width=160, anchor="center", stretch=True)
+        tree.column("jornadas", width=110, anchor="center", stretch=True)
+        tree.column("botellas", width=110, anchor="center", stretch=True)
+        tree.column("puntos", width=110, anchor="center", stretch=True)
         tree.pack(fill="both", expand=True)
         scroll.config(command=tree.yview)
 
-        for row in RANKING:
-            tree.insert("", "end", values=row)
+        try:
+            filas = repositorio.ranking_participacion()
+        except Exception:  # noqa: BLE001
+            filas = []
+        for puesto, (nombre, pet, jornadas, botellas) in enumerate(filas, start=1):
+            pet_val = float(pet) if pet is not None else 0.0
+            puntos = int(round(pet_val * 100))  # gamificación: 100 pts por kg de PET
+            tree.insert("", "end", values=(
+                puesto, nombre, f"{pet_val:g}", jornadas, botellas, puntos))
 
     # --- Acciones / navegación ---
     def generar_informe(self):

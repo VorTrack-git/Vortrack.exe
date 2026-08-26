@@ -7,6 +7,7 @@ from datetime import datetime
 
 import auth
 import ui_utils
+import repositorio
 try:
     from tkcalendar import DateEntry
 except ImportError:
@@ -130,64 +131,35 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
                 self.date_entry.insert(0, current_date)
                 self.date_entry.pack(fill="x", pady=(2, 10))
 
-        # 2. Estudiante / Aportante
-        self.create_label(form_frame, "Estudiante / Aportante")
-        
-        estudiantes = ["Seleccione estudiante...", "Arnaldo", "Miguel", "Juan", "María"]
-        
-        if ctk:
-            self.student_combo = ctk.CTkOptionMenu(
-                form_frame,
-                values=estudiantes,
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"],
-                dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"]
-            )
-            self.student_combo.set(estudiantes[0])
-            self.student_combo.pack(fill="x", pady=(2, 2))
-            
-            # Subtítulo (Hint)
-            hint_lbl = ctk.CTkLabel(form_frame, text="Se le asignarán los puntos automáticamente", font=(FONT_FAMILY, 10), text_color=COLORS["on_surface_variant"], wraplength=340, justify="left")
-            hint_lbl.pack(anchor="w", pady=(0, 15))
-        else:
-            self.student_var = tk.StringVar(value=estudiantes[0])
-            self.student_combo = tk.OptionMenu(form_frame, self.student_var, *estudiantes)
-            self.student_combo.config(
-                bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                highlightthickness=0, bd=0
-            )
-            self.student_combo.pack(fill="x", pady=(2, 2))
-            tk.Label(form_frame, text="Se le asignarán los puntos automáticamente", font=(FONT_FAMILY, 8), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"], wraplength=340, justify="left").pack(anchor="w", pady=(0, 10))
+        # Catálogos desde la base de datos (FK obligatorias)
+        try:
+            self.responsables = repositorio.listar_responsables()
+            self.lugares = repositorio.listar_lugares()
+        except Exception as exc:  # noqa: BLE001
+            self.responsables, self.lugares = [], []
+            messagebox.showwarning(
+                "Base de datos", f"No se pudieron cargar los catálogos:\n{exc}")
+        self._resp_by_name = {n: i for i, n in self.responsables}
+        self._lug_by_name = {n: i for i, n in self.lugares}
 
-        # 3. Peso (kg)
-        self.create_label(form_frame, "Peso (kg) aprovechado")
-        
-        if ctk:
-            self.peso_entry = ctk.CTkEntry(
-                form_frame,
-                placeholder_text="Ej. 2.5",
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 13)
-            )
-            self.peso_entry.pack(fill="x", pady=(2, 15))
-        else:
-            self.peso_entry = tk.Entry(
-                form_frame,
-                bg=COLORS["surface_lowest"],
-                fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"],
-                relief="flat",
-                font=(FONT_FAMILY, 12)
-            )
-            self.peso_entry.pack(fill="x", pady=(2, 10), ipady=5)
+        # 2. Estudiante / Responsable
+        self.create_label(form_frame, "Estudiante / Responsable")
+        resp_values = ["Seleccione responsable..."] + [n for _, n in self.responsables]
+        self.resp_combo, self.resp_var = self._make_combo(form_frame, resp_values)
+        self._hint(form_frame, "Se le asignarán los puntos automáticamente")
+
+        # 3. Lugar de recolección
+        self.create_label(form_frame, "Lugar de recolección")
+        lug_values = ["Seleccione lugar..."] + [n for _, n in self.lugares]
+        self.lug_combo, self.lug_var = self._make_combo(form_frame, lug_values)
+
+        # 4. Cantidad de botellas
+        self.create_label(form_frame, "Cantidad de botellas")
+        self.botellas_entry = self._make_entry(form_frame, "Ej. 20")
+
+        # 5. Peso PET (kg)
+        self.create_label(form_frame, "Peso PET (kg) aprovechado")
+        self.peso_entry = self._make_entry(form_frame, "Ej. 2.5")
 
         # 4. Observaciones
         self.create_label(form_frame, "Observaciones")
@@ -243,6 +215,45 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
         else:
             tk.Label(parent, text=text, font=(FONT_FAMILY, 10, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(anchor="w")
 
+    def _make_combo(self, parent, values):
+        """Crea un desplegable. Devuelve (widget, var) — var es None en ctk."""
+        if ctk:
+            cb = ctk.CTkOptionMenu(
+                parent, values=values, height=35,
+                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
+                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
+                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
+            cb.set(values[0])
+            cb.pack(fill="x", pady=(2, 12))
+            return cb, None
+        var = tk.StringVar(value=values[0])
+        cb = tk.OptionMenu(parent, var, *values)
+        cb.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
+                  activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
+                  highlightthickness=0, bd=0)
+        cb.pack(fill="x", pady=(2, 10))
+        return cb, var
+
+    def _make_entry(self, parent, placeholder):
+        if ctk:
+            e = ctk.CTkEntry(parent, placeholder_text=placeholder, height=35,
+                             fg_color=COLORS["surface_lowest"], border_color=COLORS["outline_variant"],
+                             text_color=COLORS["on_surface"], font=(FONT_FAMILY, 13))
+            e.pack(fill="x", pady=(2, 12))
+        else:
+            e = tk.Entry(parent, bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
+                         insertbackground=COLORS["on_surface"], relief="flat", font=(FONT_FAMILY, 12))
+            e.pack(fill="x", pady=(2, 10), ipady=5)
+        return e
+
+    def _hint(self, parent, text):
+        if ctk:
+            ctk.CTkLabel(parent, text=text, font=(FONT_FAMILY, 10), text_color=COLORS["on_surface_variant"],
+                         wraplength=340, justify="left").pack(anchor="w", pady=(0, 12))
+        else:
+            tk.Label(parent, text=text, font=(FONT_FAMILY, 8), bg=COLORS["surface_container"],
+                     fg=COLORS["on_surface_variant"], wraplength=340, justify="left").pack(anchor="w", pady=(0, 10))
+
     def clear_placeholder(self, textbox, placeholder):
         content = textbox.get("1.0", "end-1c")
         if content.strip() == placeholder:
@@ -250,40 +261,61 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
 
     def registrar(self):
         fecha = self.date_entry.get()
-        estudiante = self.student_combo.get() if ctk else self.student_var.get()
-        peso = self.peso_entry.get()
+        resp_name = self.resp_combo.get() if ctk else self.resp_var.get()
+        lug_name = self.lug_combo.get() if ctk else self.lug_var.get()
+        botellas = self.botellas_entry.get().strip()
+        peso = self.peso_entry.get().strip()
 
         obs = self.obs_textbox.get("1.0", "end-1c")
         if obs.strip() == "Opcional...":
             obs = ""
 
-        if not peso.strip():
-            messagebox.showwarning("Error", "Debe ingresar el peso aprovechado.")
+        id_resp = self._resp_by_name.get(resp_name)
+        id_lug = self._lug_by_name.get(lug_name)
+        if id_resp is None:
+            messagebox.showwarning("Error", "Debe seleccionar un responsable.")
             return
-            
+        if id_lug is None:
+            messagebox.showwarning("Error", "Debe seleccionar un lugar de recolección.")
+            return
+        if not peso:
+            messagebox.showwarning("Error", "Debe ingresar el peso de PET aprovechado.")
+            return
         try:
-            float(peso)
+            peso_val = float(peso)
         except ValueError:
             messagebox.showwarning("Error", "El peso debe ser un número válido.")
             return
-            
-        if estudiante == "Seleccione estudiante...":
-            messagebox.showwarning("Error", "Debe seleccionar un estudiante.")
+        botellas_val = None
+        if botellas:
+            try:
+                botellas_val = int(botellas)
+            except ValueError:
+                messagebox.showwarning("Error", "La cantidad de botellas debe ser un número entero.")
+                return
+
+        try:
+            id_jornada = repositorio.crear_jornada(fecha, id_lug, id_resp, botellas_val, peso_val, obs)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Error al guardar",
+                                 f"No se pudo registrar en la base de datos:\n\n{exc}")
             return
 
-        msg = f"Registro Exitoso:\n\nFecha: {fecha}\nEstudiante: {estudiante}\nPeso: {peso} kg\nObservaciones: {obs}"
-        messagebox.showinfo("Recolección Registrada", msg)
-        
-        if self.on_register_callback:
-            self.on_register_callback(fecha, estudiante, peso, obs)
-            
+        messagebox.showinfo("Recolección Registrada", f"Jornada #{id_jornada} registrada correctamente.")
+
+        self.botellas_entry.delete(0, 'end')
         self.peso_entry.delete(0, 'end')
         self.obs_textbox.delete("1.0", "end")
         self.obs_textbox.insert("1.0", "Opcional...")
         if ctk:
-            self.student_combo.set("Seleccione estudiante...")
+            self.resp_combo.set("Seleccione responsable...")
+            self.lug_combo.set("Seleccione lugar...")
         else:
-            self.student_var.set("Seleccione estudiante...")
+            self.resp_var.set("Seleccione responsable...")
+            self.lug_var.set("Seleccione lugar...")
+
+        if self.on_register_callback:
+            self.on_register_callback()
 
 
 class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
@@ -326,29 +358,41 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "estudiante", "peso", "observaciones")
+        columns = ("fecha", "responsable", "lugar", "botellas", "peso", "observaciones")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Recent.Treeview", yscrollcommand=tree_scroll.set)
-        
+
         self.tree.heading("fecha", text="Fecha")
-        self.tree.heading("estudiante", text="Estudiante")
-        self.tree.heading("peso", text="Peso (kg)")
+        self.tree.heading("responsable", text="Responsable")
+        self.tree.heading("lugar", text="Lugar")
+        self.tree.heading("botellas", text="Botellas")
+        self.tree.heading("peso", text="Peso PET (kg)")
         self.tree.heading("observaciones", text="Observaciones")
 
-        self.tree.column("fecha", width=120, anchor="center", stretch=True)
-        self.tree.column("estudiante", width=200, anchor="w", stretch=True)
-        self.tree.column("peso", width=120, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=350, anchor="w", stretch=True)
+        self.tree.column("fecha", width=95, anchor="center", stretch=True)
+        self.tree.column("responsable", width=150, anchor="w", stretch=True)
+        self.tree.column("lugar", width=150, anchor="w", stretch=True)
+        self.tree.column("botellas", width=80, anchor="center", stretch=True)
+        self.tree.column("peso", width=110, anchor="center", stretch=True)
+        self.tree.column("observaciones", width=220, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        # Datos de prueba iniciales
-        self.insert_record("07/08/2026", "Arnaldo", "2.5", "Botellas limpias")
-        self.insert_record("07/08/2026", "María", "1.2", "")
-        self.insert_record("06/08/2026", "Juan", "5.0", "Incluye tapas")
+        self.recargar()
 
-    def insert_record(self, fecha, estudiante, peso, obs):
-        self.tree.insert("", "0", values=(fecha, estudiante, peso, obs))
+    def recargar(self):
+        """Recarga la tabla desde la base de datos."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        try:
+            filas = repositorio.recolecciones_recientes()
+        except Exception:  # noqa: BLE001
+            return
+        for fecha, resp, lugar, botellas, peso, obs in filas:
+            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
+            peso_txt = f"{float(peso):g}" if peso is not None else ""
+            bot_txt = str(botellas) if botellas is not None else ""
+            self.tree.insert("", "end", values=(f, resp or "", lugar or "", bot_txt, peso_txt, obs or ""))
 
 
 class RecoleccionesApp:
@@ -556,8 +600,8 @@ class RecoleccionesApp:
         self.recent_records = RecentRecordsFrame(self.canvas_frame)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
-    def on_new_record(self, fecha, estudiante, peso, obs):
-        self.recent_records.insert_record(fecha, estudiante, peso, obs)
+    def on_new_record(self):
+        self.recent_records.recargar()
 
     def build_footer(self):
         border_top = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)

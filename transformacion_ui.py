@@ -7,6 +7,7 @@ from datetime import datetime
 
 import auth
 import ui_utils
+import repositorio
 try:
     from tkcalendar import DateEntry
 except ImportError:
@@ -138,37 +139,23 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
                 self.date_entry.insert(0, current_date)
                 self.date_entry.pack(fill="x", pady=(2, 10))
 
-        # 2. Responsable
-        self.create_label(form_frame, "Responsable")
+        # 2. Jornada de recolección (origen del PET; su PesoPET es el peso ingresado)
+        try:
+            self.jornadas = repositorio.listar_jornadas()
+        except Exception as exc:  # noqa: BLE001
+            self.jornadas = []
+            messagebox.showwarning("Base de datos", f"No se pudieron cargar las jornadas:\n{exc}")
+        self._jornada_by_label = {lab: (idj, peso) for idj, lab, peso in self.jornadas}
 
-        if ctk:
-            self.resp_combo = ctk.CTkOptionMenu(
-                form_frame,
-                values=RESPONSABLES,
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"],
-                dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"]
-            )
-            self.resp_combo.set(RESPONSABLES[0])
-            self.resp_combo.pack(fill="x", pady=(2, 15))
-        else:
-            self.resp_var = tk.StringVar(value=RESPONSABLES[0])
-            self.resp_combo = tk.OptionMenu(form_frame, self.resp_var, *RESPONSABLES)
-            self.resp_combo.config(
-                bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                highlightthickness=0, bd=0
-            )
-            self.resp_combo.pack(fill="x", pady=(2, 10))
+        self.create_label(form_frame, "Jornada de recolección (origen del PET)")
+        jornada_values = ["Seleccione jornada..."] + [lab for _, lab, _ in self.jornadas]
+        self.jornada_combo, self.jornada_var = self._make_combo(
+            form_frame, jornada_values, command=self._on_jornada)
 
-        # 3. Peso ingresado (kg)
-        self.create_label(form_frame, "Peso ingresado (kg) — PET")
-        self.ingresado_entry = self._make_entry(form_frame, "Ej. 2.0")
-        self.ingresado_entry.bind("<KeyRelease>", self._update_desperdicio)
+        # 3. Peso ingresado (kg) — automático desde la jornada seleccionada
+        self.create_label(form_frame, "Peso ingresado (kg) — PET de la jornada")
+        self.ingresado_entry = self._make_entry(form_frame, "")
+        self._set_readonly(self.ingresado_entry, "—")
 
         # 4. Peso salido (kg)
         self.create_label(form_frame, "Peso salido (kg) — filamento")
@@ -180,7 +167,15 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
         self.desperdicio_entry = self._make_entry(form_frame, "")
         self._set_readonly(self.desperdicio_entry, "—")
 
-        # 6. Metros de filamento producidos
+        # 6. Color del filamento
+        self.create_label(form_frame, "Color del filamento")
+        self.color_entry = self._make_entry(form_frame, "Ej. Translúcido, Azul...")
+
+        # 7. Diámetro (mm)
+        self.create_label(form_frame, "Diámetro (mm)")
+        self.diam_entry = self._make_entry(form_frame, "Ej. 1.75")
+
+        # 8. Metros de filamento producidos
         self.create_label(form_frame, "Metros de filamento producidos")
         self.metros_entry = self._make_entry(form_frame, "Ej. 560")
 
@@ -257,6 +252,31 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             entry.pack(fill="x", pady=(2, 10), ipady=5)
         return entry
 
+    def _make_combo(self, parent, values, command=None):
+        """Desplegable (ctk o tk). Devuelve (widget, var) — var es None en ctk."""
+        if ctk:
+            cb = ctk.CTkOptionMenu(
+                parent, values=values, height=35, command=command,
+                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
+                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
+                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
+            cb.set(values[0])
+            cb.pack(fill="x", pady=(2, 15))
+            return cb, None
+        var = tk.StringVar(value=values[0])
+        cb = tk.OptionMenu(parent, var, *values, command=command)
+        cb.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
+                  activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
+                  highlightthickness=0, bd=0)
+        cb.pack(fill="x", pady=(2, 10))
+        return cb, var
+
+    def _on_jornada(self, choice):
+        """Al elegir jornada, muestra su PesoPET como 'peso ingresado' y recalcula."""
+        info = self._jornada_by_label.get(choice)
+        self._set_readonly(self.ingresado_entry, f"{info[1]:.2f}" if info else "—")
+        self._update_desperdicio()
+
     def _set_readonly(self, entry, text):
         """Escribe un valor en un campo y lo deja de solo lectura."""
         entry.configure(state="normal")
@@ -289,78 +309,86 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
 
     def registrar(self):
         fecha = self.date_entry.get()
-        responsable = self.resp_combo.get() if ctk else self.resp_var.get()
-        ingresado = self.ingresado_entry.get()
-        salido = self.salido_entry.get()
-        metros = self.metros_entry.get()
+        jornada_label = self.jornada_combo.get() if ctk else self.jornada_var.get()
+        salido = self.salido_entry.get().strip()
+        metros = self.metros_entry.get().strip()
+        color = self.color_entry.get().strip()
+        diam = self.diam_entry.get().strip()
 
         obs = self.obs_textbox.get("1.0", "end-1c")
         if obs.strip() == "Opcional...":
             obs = ""
 
-        if responsable == RESPONSABLES[0]:
-            messagebox.showwarning("Error", "Debe seleccionar un responsable.")
+        info = self._jornada_by_label.get(jornada_label)
+        if info is None:
+            messagebox.showwarning("Error", "Debe seleccionar la jornada de recolección de origen.")
             return
+        id_jornada, ingresado_val = info
 
-        if not ingresado.strip() or not salido.strip():
-            messagebox.showwarning("Error", "Debe ingresar el peso ingresado y el peso salido.")
+        if not salido:
+            messagebox.showwarning("Error", "Debe ingresar el peso salido (filamento).")
             return
-
         try:
-            ingresado_val = float(ingresado)
             salido_val = float(salido)
         except ValueError:
-            messagebox.showwarning("Error", "Los pesos deben ser números válidos.")
+            messagebox.showwarning("Error", "El peso salido debe ser un número válido.")
             return
-
-        if ingresado_val <= 0 or salido_val <= 0:
-            messagebox.showwarning("Error", "Los pesos deben ser mayores que cero.")
+        if salido_val <= 0:
+            messagebox.showwarning("Error", "El peso salido debe ser mayor que cero.")
             return
-
         if salido_val > ingresado_val:
-            messagebox.showwarning("Error", "El peso salido no puede ser mayor que el ingresado.")
+            messagebox.showwarning(
+                "Error", f"El peso salido no puede superar el ingresado ({ingresado_val:g} kg).")
             return
 
-        if not metros.strip():
+        if not metros:
             messagebox.showwarning("Error", "Debe ingresar los metros de filamento producidos.")
             return
-
         try:
             metros_val = float(metros)
         except ValueError:
             messagebox.showwarning("Error", "Los metros deben ser un número válido.")
             return
-
         if metros_val <= 0:
             messagebox.showwarning("Error", "Los metros deben ser mayores que cero.")
             return
 
+        diam_val = None
+        if diam:
+            try:
+                diam_val = float(diam)
+            except ValueError:
+                messagebox.showwarning("Error", "El diámetro debe ser un número válido.")
+                return
+
+        try:
+            id_prod = repositorio.crear_produccion(
+                id_jornada, fecha, color or None, diam_val, salido_val, metros_val, obs)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Error al guardar",
+                                 f"No se pudo registrar en la base de datos:\n\n{exc}")
+            return
+
         desperdicio_val = ingresado_val - salido_val
+        messagebox.showinfo(
+            "Transformación Registrada",
+            f"Producción #{id_prod} registrada.\nDesperdicio calculado: {desperdicio_val:.2f} kg")
 
-        msg = (f"Filamento Registrado:\n\n"
-               f"Fecha: {fecha}\nResponsable: {responsable}\n"
-               f"Peso ingresado: {ingresado_val} kg\nPeso salido: {salido_val} kg\n"
-               f"Desperdicio: {desperdicio_val:.2f} kg\nMetros producidos: {metros_val} m\n"
-               f"Observaciones: {obs}")
-        messagebox.showinfo("Transformación Registrada", msg)
-
-        if self.on_register_callback:
-            self.on_register_callback(
-                fecha, responsable,
-                f"{ingresado_val:.2f}", f"{salido_val:.2f}",
-                f"{desperdicio_val:.2f}", f"{metros_val:g}", obs
-            )
-
-        self.ingresado_entry.delete(0, 'end')
         self.salido_entry.delete(0, 'end')
         self.metros_entry.delete(0, 'end')
+        self.color_entry.delete(0, 'end')
+        self.diam_entry.delete(0, 'end')
+        self._set_readonly(self.ingresado_entry, "—")
         self._set_readonly(self.desperdicio_entry, "—")
         self.obs_textbox.delete("1.0", "end")
         self.obs_textbox.insert("1.0", "Opcional...")
         if ctk:
-            self.resp_combo.set(RESPONSABLES[0])
+            self.jornada_combo.set("Seleccione jornada...")
         else:
-            self.resp_var.set(RESPONSABLES[0])
+            self.jornada_var.set("Seleccione jornada...")
+
+        if self.on_register_callback:
+            self.on_register_callback()
 
 
 class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
@@ -403,35 +431,52 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "responsable", "ingresado", "salido", "desperdicio", "metros", "observaciones")
+        columns = ("fecha", "jornada", "ingresado", "salido", "desperdicio", "color", "diametro", "metros", "observaciones")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Transf.Treeview", yscrollcommand=tree_scroll.set)
 
         self.tree.heading("fecha", text="Fecha")
-        self.tree.heading("responsable", text="Responsable")
+        self.tree.heading("jornada", text="Jornada")
         self.tree.heading("ingresado", text="Ingresado (kg)")
         self.tree.heading("salido", text="Salido (kg)")
         self.tree.heading("desperdicio", text="Desperdicio (kg)")
+        self.tree.heading("color", text="Color")
+        self.tree.heading("diametro", text="Diám. (mm)")
         self.tree.heading("metros", text="Metros (m)")
         self.tree.heading("observaciones", text="Observaciones")
 
-        self.tree.column("fecha", width=100, anchor="center", stretch=True)
-        self.tree.column("responsable", width=120, anchor="w", stretch=True)
-        self.tree.column("ingresado", width=110, anchor="center", stretch=True)
-        self.tree.column("salido", width=100, anchor="center", stretch=True)
-        self.tree.column("desperdicio", width=120, anchor="center", stretch=True)
-        self.tree.column("metros", width=100, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=200, anchor="w", stretch=True)
+        self.tree.column("fecha", width=90, anchor="center", stretch=True)
+        self.tree.column("jornada", width=70, anchor="center", stretch=True)
+        self.tree.column("ingresado", width=100, anchor="center", stretch=True)
+        self.tree.column("salido", width=90, anchor="center", stretch=True)
+        self.tree.column("desperdicio", width=110, anchor="center", stretch=True)
+        self.tree.column("color", width=100, anchor="w", stretch=True)
+        self.tree.column("diametro", width=85, anchor="center", stretch=True)
+        self.tree.column("metros", width=90, anchor="center", stretch=True)
+        self.tree.column("observaciones", width=170, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        # Datos de prueba iniciales
-        self.insert_record("07/08/2026", "Arnaldo", "2.00", "1.70", "0.30", "560", "Filamento translúcido")
-        self.insert_record("06/08/2026", "María", "2.50", "2.10", "0.40", "690", "Buen acabado")
-        self.insert_record("05/08/2026", "Juan", "3.00", "2.40", "0.60", "790", "")
+        self.recargar()
 
-    def insert_record(self, fecha, responsable, ingresado, salido, desperdicio, metros, obs):
-        self.tree.insert("", "0", values=(fecha, responsable, ingresado, salido, desperdicio, metros, obs))
+    def recargar(self):
+        """Recarga el historial desde la base de datos."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        try:
+            filas = repositorio.producciones_recientes()
+        except Exception:  # noqa: BLE001
+            return
+        for fecha, id_jornada, color, diametro, peso_pet, peso_obt, metros, obs in filas:
+            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
+            ingresado = float(peso_pet) if peso_pet is not None else 0.0
+            salido = float(peso_obt) if peso_obt is not None else 0.0
+            desperdicio = max(ingresado - salido, 0.0)
+            self.tree.insert("", "end", values=(
+                f, f"#{id_jornada}" if id_jornada is not None else "",
+                f"{ingresado:g}", f"{salido:g}", f"{desperdicio:.2f}",
+                color or "", f"{float(diametro):g}" if diametro is not None else "",
+                f"{float(metros):g}" if metros is not None else "", obs or ""))
 
 
 class TransformacionApp:
@@ -637,8 +682,8 @@ class TransformacionApp:
         self.recent_records = RecentTransformacionesFrame(self.canvas_frame)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
-    def on_new_record(self, fecha, responsable, ingresado, salido, desperdicio, metros, obs):
-        self.recent_records.insert_record(fecha, responsable, ingresado, salido, desperdicio, metros, obs)
+    def on_new_record(self):
+        self.recent_records.recargar()
 
     def build_footer(self):
         border_top = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)

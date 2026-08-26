@@ -7,3 +7,6 @@ venv/
 
 # Runtime / local state
 .vortrack_remember.json
+
+# Credenciales de base de datos (NO versionar)
+db_config.ini

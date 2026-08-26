@@ -1,19 +1,20 @@
-"""Autenticación local para VorTrack."""
+"""Autenticación de VorTrack contra la base de datos (tabla Usuarios)."""
 
 import hashlib
 import json
 import os
 from typing import Optional
 
+import db
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REMEMBER_FILE = os.path.join(BASE_DIR, ".vortrack_remember.json")
 
-# Usuario demo hasta conectar una base de datos real.
-_USERS = {
-    "vortrack.soporte@gmail.com": hashlib.sha256("12345678".encode("utf-8")).hexdigest(),
-}
-
 _session: Optional[dict] = None
+
+
+class DatabaseUnavailable(Exception):
+    """La base de datos no está accesible (config, red o driver)."""
 
 
 def _hash_password(password: str) -> str:
@@ -21,7 +22,7 @@ def _hash_password(password: str) -> str:
 
 
 def authenticate(username: str, password: str) -> bool:
-    """Valida credenciales y abre sesión si son correctas."""
+    """Valida credenciales contra la tabla Usuarios y abre sesión si son correctas."""
     global _session
 
     user = username.strip()
@@ -30,12 +31,35 @@ def authenticate(username: str, password: str) -> bool:
     if not user or not pwd:
         return False
 
-    stored_hash = _USERS.get(user)
-    if stored_hash is None or stored_hash != _hash_password(pwd):
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT u.IdUsuario, u.Nombres, u.Apellidos, u.Usuario, u.Contrasena, "
+            "u.IdRol, r.Nombre AS Rol "
+            "FROM Usuarios u LEFT JOIN Roles r ON u.IdRol = r.IdRol "
+            "WHERE u.Usuario = ? AND u.Estado = 'Activo'",
+            user,
+        )
+        row = cursor.fetchone()
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        _session = None
+        # Se propaga para que la UI muestre el error real (no "credenciales incorrectas").
+        raise DatabaseUnavailable(str(exc)) from exc
+
+    if row is None or row.Contrasena != _hash_password(pwd):
         _session = None
         return False
 
-    _session = {"username": user}
+    _session = {
+        "id": row.IdUsuario,
+        "username": row.Usuario,
+        "nombres": row.Nombres,
+        "apellidos": row.Apellidos,
+        "id_rol": row.IdRol,
+        "rol": row.Rol,
+    }
     return True
 
 

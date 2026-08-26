@@ -43,16 +43,29 @@ COLORS = {
 
 
 def maximize_window(root):
-    """Abre la ventana maximizada (ocupa toda la pantalla y conserva la barra de título)."""
-    root.update_idletasks()
-    try:
-        root.state("zoomed")  # Windows y la mayoría de Tk en Windows
-    except tk.TclError:
+    """Abre la ventana maximizada (ocupa toda la pantalla y conserva la barra de título).
+
+    En tkinter puro basta llamar state('zoomed') una vez, pero customtkinter
+    reajusta la geometría durante su init, así que hay que reintentar el
+    maximizado de forma diferida (cuando ya corre el bucle de eventos).
+    """
+    def _apply():
         try:
-            root.attributes("-zoomed", True)  # algunos entornos Linux
+            if not root.winfo_exists():
+                return
+            root.state("zoomed")  # Windows y la mayoría de Tk en Windows
         except tk.TclError:
-            # Último recurso: geometría del tamaño completo de pantalla
-            root.geometry(f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0")
+            try:
+                root.attributes("-zoomed", True)  # algunos entornos Linux
+            except tk.TclError:
+                try:
+                    root.geometry(f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0")
+                except tk.TclError:
+                    pass
+
+    root.update_idletasks()
+    _apply()               # intento inmediato (funciona en tkinter puro)
+    root.after(60, _apply)  # reintento diferido (necesario en customtkinter)
 
 
 def load_image(path, size):

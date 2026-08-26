@@ -7,6 +7,7 @@ from datetime import datetime
 
 import auth
 import ui_utils
+import repositorio
 try:
     from tkcalendar import DateEntry
 except ImportError:
@@ -45,8 +46,8 @@ COLORS = {
 
 FONT_FAMILY = "Segoe UI"
 
-RESPONSABLES = ["Seleccione responsable...", "Arnaldo", "Miguel", "Juan", "María"]
-ESTADOS = ["Seleccione estado...", "Exitosa", "Con fallas", "Fallida"]
+# Estados permitidos por el CHECK constraint de FabricacionObjetos.Estado
+ESTADOS = ["Seleccione estado...", "En proceso", "Finalizado", "Fallido"]
 
 
 class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
@@ -132,81 +133,43 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
                 self.date_entry.insert(0, current_date)
                 self.date_entry.pack(fill="x", pady=(2, 10))
 
-        # 2. Responsable
-        self.create_label(form_frame, "Responsable")
-        if ctk:
-            self.resp_combo = ctk.CTkOptionMenu(
-                form_frame, values=RESPONSABLES, height=35,
-                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"]
-            )
-            self.resp_combo.set(RESPONSABLES[0])
-            self.resp_combo.pack(fill="x", pady=(2, 15))
-        else:
-            self.resp_var = tk.StringVar(value=RESPONSABLES[0])
-            self.resp_combo = tk.OptionMenu(form_frame, self.resp_var, *RESPONSABLES)
-            self.resp_combo.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                                   activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                                   highlightthickness=0, bd=0)
-            self.resp_combo.pack(fill="x", pady=(2, 10))
+        # Catálogos desde la base de datos (FK obligatorias)
+        try:
+            self.modelos = repositorio.listar_modelos()
+            self.producciones = repositorio.listar_producciones()
+        except Exception as exc:  # noqa: BLE001
+            self.modelos, self.producciones = [], []
+            messagebox.showwarning("Base de datos", f"No se pudieron cargar los catálogos:\n{exc}")
+        self._modelo_by_name = {n: i for i, n in self.modelos}
+        self._prod_by_label = {lab: idp for idp, lab, _ in self.producciones}
 
-        # 3. Objeto / material didáctico
-        self.create_label(form_frame, "Objeto / material didáctico")
-        self.objeto_entry = self._make_entry(form_frame, "Ej. Engranaje, molécula, regla...")
+        # 2. Modelo (material didáctico)
+        self.create_label(form_frame, "Modelo (material didáctico)")
+        modelo_values = ["Seleccione modelo..."] + [n for _, n in self.modelos]
+        self.modelo_combo, self.modelo_var = self._make_combo(form_frame, modelo_values)
+
+        # 3. Producción de filamento utilizada
+        self.create_label(form_frame, "Filamento utilizado (producción)")
+        prod_values = ["Seleccione producción..."] + [lab for _, lab, _ in self.producciones]
+        self.prod_combo, self.prod_var = self._make_combo(form_frame, prod_values)
 
         # 4. Cantidad de piezas
         self.create_label(form_frame, "Cantidad de piezas")
         self.piezas_entry = self._make_entry(form_frame, "Ej. 3")
 
-        # 5. Filamento utilizado (g)
-        self.create_label(form_frame, "Filamento utilizado (g)")
+        # 5. Peso de filamento utilizado (g)
+        self.create_label(form_frame, "Peso de filamento utilizado (g)")
         self.filamento_entry = self._make_entry(form_frame, "Ej. 120")
 
-        # 6. Tiempo de impresión (h)
-        self.create_label(form_frame, "Tiempo de impresión (h)")
-        self.tiempo_entry = self._make_entry(form_frame, "Ej. 2.5")
+        # 6. Tiempo de impresión (min)
+        self.create_label(form_frame, "Tiempo de impresión (min)")
+        self.tiempo_entry = self._make_entry(form_frame, "Ej. 150")
 
         # 7. Estado
         self.create_label(form_frame, "Estado")
-        if ctk:
-            self.estado_combo = ctk.CTkOptionMenu(
-                form_frame, values=ESTADOS, height=35,
-                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"]
-            )
-            self.estado_combo.set(ESTADOS[0])
-            self.estado_combo.pack(fill="x", pady=(2, 15))
-        else:
-            self.estado_var = tk.StringVar(value=ESTADOS[0])
-            self.estado_combo = tk.OptionMenu(form_frame, self.estado_var, *ESTADOS)
-            self.estado_combo.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                                     activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                                     highlightthickness=0, bd=0)
-            self.estado_combo.pack(fill="x", pady=(2, 10))
+        self.estado_combo, self.estado_var = self._make_combo(form_frame, ESTADOS)
 
-        # 8. Observaciones
-        self.create_label(form_frame, "Observaciones")
-        if ctk:
-            self.obs_textbox = ctk.CTkTextbox(
-                form_frame, height=70, fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"], border_width=1,
-                text_color=COLORS["on_surface"], font=(FONT_FAMILY, 13)
-            )
-            self.obs_textbox.insert("1.0", "Opcional...")
-            self.obs_textbox.bind("<FocusIn>", lambda e: self.clear_placeholder(self.obs_textbox, "Opcional..."))
-            self.obs_textbox.pack(fill="x", pady=(2, 25))
-        else:
-            self.obs_textbox = tk.Text(
-                form_frame, height=3, width=1,
-                bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"], relief="flat",
-                font=(FONT_FAMILY, 12), wrap="word"
-            )
-            self.obs_textbox.pack(fill="x", pady=(2, 15), ipady=4)
-
-        # 9. Botón Registrar
+        # 8. Botón Registrar
         if ctk:
             btn_registrar = ctk.CTkButton(
                 form_frame, text="Registrar Impresión", font=(FONT_FAMILY, 14, "bold"),
@@ -233,6 +196,25 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             entry.pack(fill="x", pady=(2, 10), ipady=5)
         return entry
 
+    def _make_combo(self, parent, values):
+        """Desplegable (ctk o tk). Devuelve (widget, var) — var es None en ctk."""
+        if ctk:
+            cb = ctk.CTkOptionMenu(
+                parent, values=values, height=35,
+                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
+                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
+                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
+            cb.set(values[0])
+            cb.pack(fill="x", pady=(2, 15))
+            return cb, None
+        var = tk.StringVar(value=values[0])
+        cb = tk.OptionMenu(parent, var, *values)
+        cb.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
+                  activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
+                  highlightthickness=0, bd=0)
+        cb.pack(fill="x", pady=(2, 10))
+        return cb, var
+
     def create_label(self, parent, text):
         if ctk:
             ctk.CTkLabel(parent, text=text, font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"]).pack(anchor="w")
@@ -245,22 +227,20 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
 
     def registrar(self):
         fecha = self.date_entry.get()
-        responsable = self.resp_combo.get() if ctk else self.resp_var.get()
+        modelo_name = self.modelo_combo.get() if ctk else self.modelo_var.get()
+        prod_label = self.prod_combo.get() if ctk else self.prod_var.get()
         estado = self.estado_combo.get() if ctk else self.estado_var.get()
-        objeto = self.objeto_entry.get().strip()
-        piezas = self.piezas_entry.get()
-        filamento = self.filamento_entry.get()
-        tiempo = self.tiempo_entry.get()
+        piezas = self.piezas_entry.get().strip()
+        filamento = self.filamento_entry.get().strip()
+        tiempo = self.tiempo_entry.get().strip()
 
-        obs = self.obs_textbox.get("1.0", "end-1c")
-        if obs.strip() == "Opcional...":
-            obs = ""
-
-        if responsable == RESPONSABLES[0]:
-            messagebox.showwarning("Error", "Debe seleccionar un responsable.")
+        id_modelo = self._modelo_by_name.get(modelo_name)
+        id_prod = self._prod_by_label.get(prod_label)
+        if id_modelo is None:
+            messagebox.showwarning("Error", "Debe seleccionar un modelo.")
             return
-        if not objeto:
-            messagebox.showwarning("Error", "Debe indicar el objeto o material didáctico.")
+        if id_prod is None:
+            messagebox.showwarning("Error", "Debe seleccionar la producción de filamento utilizada.")
             return
 
         try:
@@ -274,9 +254,13 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
 
         try:
             filamento_val = float(filamento)
-            tiempo_val = float(tiempo)
         except ValueError:
-            messagebox.showwarning("Error", "El filamento (g) y el tiempo (h) deben ser números válidos.")
+            messagebox.showwarning("Error", "El peso de filamento (g) debe ser un número válido.")
+            return
+        try:
+            tiempo_val = int(float(tiempo))
+        except ValueError:
+            messagebox.showwarning("Error", "El tiempo (min) debe ser un número válido.")
             return
         if filamento_val <= 0 or tiempo_val <= 0:
             messagebox.showwarning("Error", "El filamento y el tiempo deben ser mayores que cero.")
@@ -286,30 +270,30 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             messagebox.showwarning("Error", "Debe seleccionar el estado de la impresión.")
             return
 
-        msg = (f"Impresión Registrada:\n\n"
-               f"Fecha: {fecha}\nResponsable: {responsable}\nObjeto: {objeto}\n"
-               f"Piezas: {piezas_val}\nFilamento: {filamento_val} g\nTiempo: {tiempo_val} h\n"
-               f"Estado: {estado}\nObservaciones: {obs}")
-        messagebox.showinfo("Impresión Registrada", msg)
+        try:
+            id_fab = repositorio.crear_fabricacion(
+                id_modelo, id_prod, fecha, piezas_val, filamento_val, tiempo_val, estado)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Error al guardar",
+                                 f"No se pudo registrar en la base de datos:\n\n{exc}")
+            return
 
-        if self.on_register_callback:
-            self.on_register_callback(
-                fecha, responsable, objeto, str(piezas_val),
-                f"{filamento_val:g}", f"{tiempo_val:g}", estado, obs
-            )
+        messagebox.showinfo("Impresión Registrada", f"Fabricación #{id_fab} registrada correctamente.")
 
-        self.objeto_entry.delete(0, 'end')
         self.piezas_entry.delete(0, 'end')
         self.filamento_entry.delete(0, 'end')
         self.tiempo_entry.delete(0, 'end')
-        self.obs_textbox.delete("1.0", "end")
-        self.obs_textbox.insert("1.0", "Opcional...")
         if ctk:
-            self.resp_combo.set(RESPONSABLES[0])
+            self.modelo_combo.set("Seleccione modelo...")
+            self.prod_combo.set("Seleccione producción...")
             self.estado_combo.set(ESTADOS[0])
         else:
-            self.resp_var.set(RESPONSABLES[0])
+            self.modelo_var.set("Seleccione modelo...")
+            self.prod_var.set("Seleccione producción...")
             self.estado_var.set(ESTADOS[0])
+
+        if self.on_register_callback:
+            self.on_register_callback()
 
 
 class RecentImpresionesFrame(ctk.CTkFrame if ctk else tk.Frame):
@@ -344,37 +328,45 @@ class RecentImpresionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "responsable", "objeto", "piezas", "filamento", "tiempo", "estado", "observaciones")
+        columns = ("fecha", "modelo", "produccion", "piezas", "filamento", "tiempo", "estado")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Impr.Treeview", yscrollcommand=tree_scroll.set)
 
         self.tree.heading("fecha", text="Fecha")
-        self.tree.heading("responsable", text="Responsable")
-        self.tree.heading("objeto", text="Objeto")
+        self.tree.heading("modelo", text="Modelo")
+        self.tree.heading("produccion", text="Filamento")
         self.tree.heading("piezas", text="Piezas")
-        self.tree.heading("filamento", text="Filamento (g)")
-        self.tree.heading("tiempo", text="Tiempo (h)")
+        self.tree.heading("filamento", text="Peso (g)")
+        self.tree.heading("tiempo", text="Tiempo (min)")
         self.tree.heading("estado", text="Estado")
-        self.tree.heading("observaciones", text="Observaciones")
 
         self.tree.column("fecha", width=95, anchor="center", stretch=True)
-        self.tree.column("responsable", width=110, anchor="w", stretch=True)
-        self.tree.column("objeto", width=160, anchor="w", stretch=True)
+        self.tree.column("modelo", width=190, anchor="w", stretch=True)
+        self.tree.column("produccion", width=90, anchor="center", stretch=True)
         self.tree.column("piezas", width=70, anchor="center", stretch=True)
-        self.tree.column("filamento", width=100, anchor="center", stretch=True)
-        self.tree.column("tiempo", width=90, anchor="center", stretch=True)
-        self.tree.column("estado", width=90, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=180, anchor="w", stretch=True)
+        self.tree.column("filamento", width=90, anchor="center", stretch=True)
+        self.tree.column("tiempo", width=100, anchor="center", stretch=True)
+        self.tree.column("estado", width=100, anchor="center", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        # Datos de prueba iniciales
-        self.insert_record("07/08/2026", "Arnaldo", "Engranaje didáctico", "4", "120", "2.5", "Exitosa", "Buen acabado")
-        self.insert_record("06/08/2026", "María", "Molécula H₂O", "1", "45", "1.0", "Con fallas", "Warping leve")
-        self.insert_record("05/08/2026", "Juan", "Regla graduada", "6", "90", "1.8", "Exitosa", "")
+        self.recargar()
 
-    def insert_record(self, fecha, responsable, objeto, piezas, filamento, tiempo, estado, obs):
-        self.tree.insert("", "0", values=(fecha, responsable, objeto, piezas, filamento, tiempo, estado, obs))
+    def recargar(self):
+        """Recarga el historial desde la base de datos."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        try:
+            filas = repositorio.fabricaciones_recientes()
+        except Exception:  # noqa: BLE001
+            return
+        for fecha, modelo, cantidad, peso, tiempo, estado, id_prod in filas:
+            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
+            peso_txt = f"{float(peso):g}" if peso is not None else ""
+            self.tree.insert("", "end", values=(
+                f, modelo or "", f"#{id_prod}" if id_prod is not None else "",
+                cantidad if cantidad is not None else "", peso_txt,
+                tiempo if tiempo is not None else "", estado or ""))
 
 
 class ImpresionApp:
@@ -433,8 +425,8 @@ class ImpresionApp:
         self.recent_records = RecentImpresionesFrame(self.canvas_frame)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
-    def on_new_record(self, *values):
-        self.recent_records.insert_record(*values)
+    def on_new_record(self):
+        self.recent_records.recargar()
 
     def build_footer(self):
         ui_utils.build_app_footer(self)

@@ -366,7 +366,17 @@ class LoginApp:
             messagebox.showwarning("Campos Requeridos", "Por favor ingrese su identificador y credencial de acceso.")
             return
 
-        if not auth.authenticate(user, pwd):
+        try:
+            autenticado = auth.authenticate(user, pwd)
+        except auth.DatabaseUnavailable as exc:
+            messagebox.showerror(
+                "Error de conexión",
+                "No se pudo conectar a la base de datos:\n\n"
+                f"{exc}\n\nRevise db_config.ini y que el servidor esté accesible."
+            )
+            return
+
+        if not autenticado:
             messagebox.showerror(
                 "Acceso Denegado",
                 "Identificador o credencial incorrectos.\n\nVerifique sus datos e intente nuevamente."
