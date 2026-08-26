@@ -49,14 +49,8 @@ class LoginApp:
         self.logo_path = os.path.join(self.base_dir, "Vortrack logo.png")
         self.icon_path = os.path.join(self.base_dir, "VorTrack icon.png")
         
-        # Set Window Icon
-        if os.path.exists(self.icon_path):
-            try:
-                icon_img = Image.open(self.icon_path)
-                self.icon_photo = ImageTk.PhotoImage(icon_img)
-                self.root.iconphoto(False, self.icon_photo)
-            except Exception as e:
-                print(f"Could not load iconphoto: {e}")
+        # Ícono de la ventana (logo transparente, sin el cuadro oscuro)
+        ui_utils.set_window_icon(self.root)
 
         # Configure CustomTkinter settings
         if ctk:

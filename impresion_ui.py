@@ -384,13 +384,7 @@ class ImpresionApp:
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.icon_path = os.path.join(self.base_dir, "VorTrack icon.png")
 
-        if os.path.exists(self.icon_path):
-            try:
-                icon_img = Image.open(self.icon_path)
-                self.icon_photo = ImageTk.PhotoImage(icon_img)
-                self.root.iconphoto(False, self.icon_photo)
-            except Exception:
-                pass
+        ui_utils.set_window_icon(self.root)
 
         if ctk:
             ctk.set_appearance_mode("Dark")

@@ -68,6 +68,49 @@ def maximize_window(root):
     root.after(60, _apply)  # reintento diferido (necesario en customtkinter)
 
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def set_window_icon(root):
+    """Fija el ícono de la ventana usando VorTrack.ico (logo transparente).
+
+    En Windows usa iconbitmap con el .ico (nítido en barra de título y de
+    tareas). Si falla, cae a iconphoto con el PNG transparente. Se reintenta
+    de forma diferida porque customtkinter puede sobreescribir el ícono al
+    inicializarse.
+    """
+    ico = os.path.join(_BASE_DIR, "VorTrack.ico")
+    png = os.path.join(_BASE_DIR, "VorTrack_icon_transparent.png")
+    if not os.path.exists(png):
+        png = os.path.join(_BASE_DIR, "VorTrack icon.png")
+
+    def _apply():
+        try:
+            if not root.winfo_exists():
+                return
+        except Exception:
+            return
+        if os.name == "nt" and os.path.exists(ico):
+            try:
+                root.iconbitmap(ico)
+                return
+            except Exception:
+                pass
+        if os.path.exists(png):
+            try:
+                photo = ImageTk.PhotoImage(Image.open(png))
+                root._vortrack_icon = photo  # mantener la referencia viva
+                root.iconphoto(True, photo)
+            except Exception:
+                pass
+
+    _apply()
+    try:
+        root.after(300, _apply)
+    except Exception:
+        pass
+
+
 def load_image(path, size):
     """Carga una imagen como CTkImage o ImageTk según la librería disponible."""
     if not os.path.exists(path):
