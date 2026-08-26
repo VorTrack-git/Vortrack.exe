@@ -219,3 +219,254 @@ def ranking_participacion(limite=10):
         "LEFT JOIN JornadasRecoleccion j ON j.IdResponsable = r.IdResponsable "
         "GROUP BY r.NombreResponsable "
         "ORDER BY Pet DESC")
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de estudiantes (Usuarios rol Estudiante + Responsables)
+# ---------------------------------------------------------------------------
+def listar_estudiantes():
+    """(IdUsuario, Nombres, Apellidos, Correo, Telefono, Contrasena, Estado)."""
+    return _query(
+        "SELECT u.IdUsuario, u.Nombres, u.Apellidos, u.Usuario, r.Telefono, "
+        "u.Contrasena, u.Estado "
+        "FROM Usuarios u "
+        "JOIN Roles ro ON u.IdRol = ro.IdRol AND ro.Nombre = 'Estudiante' "
+        "LEFT JOIN Responsables r ON r.Email = u.Usuario "
+        "ORDER BY u.Nombres, u.Apellidos")
+
+
+def _id_rol_estudiante(cur):
+    cur.execute("SELECT IdRol FROM Roles WHERE Nombre = 'Estudiante'")
+    r = cur.fetchone()
+    if r:
+        return r[0]
+    cur.execute("INSERT INTO Roles (Nombre) OUTPUT INSERTED.IdRol VALUES ('Estudiante')")
+    return cur.fetchone()[0]
+
+
+def crear_estudiante(nombres, apellidos, correo, telefono, contrasena):
+    """Crea el estudiante en Usuarios (login) y en Responsables (aportante)."""
+    correo = (correo or "").strip()
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM Usuarios WHERE Usuario = ?", correo)
+        if cur.fetchone()[0] > 0:
+            raise ValueError("Ya existe una cuenta con ese correo.")
+        id_rol = _id_rol_estudiante(cur)
+        nombre_completo = f"{nombres} {apellidos}".strip()
+        cur.execute("SELECT COUNT(*) FROM Responsables WHERE Email = ?", correo)
+        if cur.fetchone()[0] == 0:
+            cur.execute(
+                "INSERT INTO Responsables (NombreResponsable, Email, Telefono) VALUES (?, ?, ?)",
+                nombre_completo, correo, (telefono or None))
+        cur.execute(
+            "INSERT INTO Usuarios (Nombres, Apellidos, Usuario, Contrasena, IdRol, Estado) "
+            "OUTPUT INSERTED.IdUsuario VALUES (?, ?, ?, ?, ?, 'Activo')",
+            nombres, apellidos, correo, contrasena, id_rol)
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
+
+
+def actualizar_estudiante(id_usuario, nombres, apellidos, correo, telefono, contrasena, estado):
+    correo = (correo or "").strip()
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT Usuario FROM Usuarios WHERE IdUsuario = ?", id_usuario)
+        row = cur.fetchone()
+        correo_anterior = row[0] if row else None
+        cur.execute("SELECT COUNT(*) FROM Usuarios WHERE Usuario = ? AND IdUsuario <> ?",
+                    correo, id_usuario)
+        if cur.fetchone()[0] > 0:
+            raise ValueError("Ya existe otra cuenta con ese correo.")
+        cur.execute(
+            "UPDATE Usuarios SET Nombres=?, Apellidos=?, Usuario=?, Contrasena=?, Estado=? "
+            "WHERE IdUsuario=?",
+            nombres, apellidos, correo, contrasena, estado, id_usuario)
+        nombre_completo = f"{nombres} {apellidos}".strip()
+        cur.execute(
+            "UPDATE Responsables SET NombreResponsable=?, Email=?, Telefono=? WHERE Email=?",
+            nombre_completo, correo, (telefono or None), correo_anterior)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def eliminar_estudiante(id_usuario):
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT Usuario FROM Usuarios WHERE IdUsuario = ?", id_usuario)
+        row = cur.fetchone()
+        correo = row[0] if row else None
+        cur.execute("DELETE FROM Usuarios WHERE IdUsuario = ?", id_usuario)
+        if correo:
+            cur.execute("SELECT IdResponsable FROM Responsables WHERE Email = ?", correo)
+            r = cur.fetchone()
+            if r:
+                cur.execute("SELECT COUNT(*) FROM JornadasRecoleccion WHERE IdResponsable = ?", r[0])
+                if cur.fetchone()[0] == 0:
+                    cur.execute("DELETE FROM Responsables WHERE IdResponsable = ?", r[0])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de recolecciones (JornadasRecoleccion)
+# ---------------------------------------------------------------------------
+def recolecciones_admin(limite=300):
+    return _query(
+        f"SELECT TOP {int(limite)} j.IdJornada, j.Fecha, r.NombreResponsable, l.NombreLugar, "
+        "j.CantidadBotellas, j.PesoPET, j.Observaciones "
+        "FROM JornadasRecoleccion j "
+        "LEFT JOIN Responsables r ON j.IdResponsable = r.IdResponsable "
+        "LEFT JOIN Lugares l ON j.IdLugar = l.IdLugar "
+        "ORDER BY j.Fecha DESC, j.IdJornada DESC")
+
+
+def obtener_jornada(id_jornada):
+    return _query(
+        "SELECT IdJornada, Fecha, IdLugar, IdResponsable, CantidadBotellas, PesoPET, Observaciones "
+        "FROM JornadasRecoleccion WHERE IdJornada = ?", (id_jornada,), fetch="one")
+
+
+def actualizar_jornada(id_jornada, fecha, id_lugar, id_responsable, botellas, peso, obs):
+    _execute(
+        "UPDATE JornadasRecoleccion SET Fecha=?, IdLugar=?, IdResponsable=?, "
+        "CantidadBotellas=?, PesoPET=?, Observaciones=? WHERE IdJornada=?",
+        (parse_fecha(fecha), id_lugar, id_responsable, botellas, peso, obs or None, id_jornada))
+
+
+def eliminar_jornada(id_jornada):
+    fila = _query("SELECT COUNT(*) FROM ProduccionFilamento WHERE IdJornada = ?",
+                  (id_jornada,), fetch="one")
+    if fila and fila[0] > 0:
+        raise RuntimeError(
+            "No se puede eliminar: la jornada tiene producciones de filamento asociadas. "
+            "Elimine primero esas producciones.")
+    _execute("DELETE FROM JornadasRecoleccion WHERE IdJornada = ?", (id_jornada,))
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de transformaciones (ProduccionFilamento)
+# ---------------------------------------------------------------------------
+def producciones_admin(limite=300):
+    return _query(
+        f"SELECT TOP {int(limite)} p.IdProduccion, p.Fecha, p.IdJornada, p.Color, "
+        "p.Diametro, p.PesoObtenido, p.MetrosProduccion, p.Observaciones "
+        "FROM ProduccionFilamento p ORDER BY p.Fecha DESC, p.IdProduccion DESC")
+
+
+def obtener_produccion(id_produccion):
+    return _query(
+        "SELECT IdProduccion, IdJornada, Fecha, Color, Diametro, PesoObtenido, "
+        "MetrosProduccion, Observaciones FROM ProduccionFilamento WHERE IdProduccion = ?",
+        (id_produccion,), fetch="one")
+
+
+def actualizar_produccion(id_produccion, id_jornada, fecha, color, diametro, peso_obtenido, metros, obs):
+    _execute(
+        "UPDATE ProduccionFilamento SET IdJornada=?, Fecha=?, Color=?, Diametro=?, "
+        "PesoObtenido=?, MetrosProduccion=?, Observaciones=? WHERE IdProduccion=?",
+        (id_jornada, parse_fecha(fecha), color or None, diametro, peso_obtenido, metros,
+         obs or None, id_produccion))
+
+
+def eliminar_produccion(id_produccion):
+    fila = _query("SELECT COUNT(*) FROM FabricacionObjetos WHERE IdProduccion = ?",
+                  (id_produccion,), fetch="one")
+    if fila and fila[0] > 0:
+        raise RuntimeError(
+            "No se puede eliminar: la producción tiene impresiones asociadas. "
+            "Elimine primero esas impresiones.")
+    _execute("DELETE FROM ProduccionFilamento WHERE IdProduccion = ?", (id_produccion,))
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de impresiones (FabricacionObjetos)
+# ---------------------------------------------------------------------------
+def fabricaciones_admin(limite=300):
+    return _query(
+        f"SELECT TOP {int(limite)} f.IdFabricacion, f.Fecha, f.IdModelo, m.Nombre, "
+        "f.IdProduccion, f.Cantidad, f.PesoUtilizado, f.TiempoImpresion, f.Estado "
+        "FROM FabricacionObjetos f LEFT JOIN Modelos m ON f.IdModelo = m.IdModelo "
+        "ORDER BY f.Fecha DESC, f.IdFabricacion DESC")
+
+
+def obtener_fabricacion(id_fab):
+    return _query(
+        "SELECT IdFabricacion, IdModelo, IdProduccion, Fecha, Cantidad, PesoUtilizado, "
+        "TiempoImpresion, Estado FROM FabricacionObjetos WHERE IdFabricacion = ?",
+        (id_fab,), fetch="one")
+
+
+def actualizar_fabricacion(id_fab, id_modelo, id_produccion, fecha, cantidad, peso, tiempo, estado):
+    _execute(
+        "UPDATE FabricacionObjetos SET IdModelo=?, IdProduccion=?, Fecha=?, Cantidad=?, "
+        "PesoUtilizado=?, TiempoImpresion=?, Estado=? WHERE IdFabricacion=?",
+        (id_modelo, id_produccion, parse_fecha(fecha), cantidad, peso, tiempo, estado, id_fab))
+
+
+def eliminar_fabricacion(id_fab):
+    _execute("DELETE FROM FabricacionObjetos WHERE IdFabricacion = ?", (id_fab,))
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de Lugares
+# ---------------------------------------------------------------------------
+def listar_lugares_admin():
+    return _query("SELECT IdLugar, NombreLugar, Descripcion FROM Lugares ORDER BY NombreLugar")
+
+
+def crear_lugar(nombre, descripcion):
+    return _execute(
+        "INSERT INTO Lugares (NombreLugar, Descripcion) OUTPUT INSERTED.IdLugar VALUES (?, ?)",
+        (nombre, descripcion or None), return_id=True)
+
+
+def actualizar_lugar(id_lugar, nombre, descripcion):
+    _execute("UPDATE Lugares SET NombreLugar=?, Descripcion=? WHERE IdLugar=?",
+             (nombre, descripcion or None, id_lugar))
+
+
+def eliminar_lugar(id_lugar):
+    fila = _query("SELECT COUNT(*) FROM JornadasRecoleccion WHERE IdLugar = ?",
+                  (id_lugar,), fetch="one")
+    if fila and fila[0] > 0:
+        raise RuntimeError("No se puede eliminar: el lugar tiene recolecciones asociadas.")
+    _execute("DELETE FROM Lugares WHERE IdLugar = ?", (id_lugar,))
+
+
+# ---------------------------------------------------------------------------
+# ADMINISTRACIÓN — CRUD de Modelos (material didáctico a imprimir)
+# ---------------------------------------------------------------------------
+def listar_modelos_admin():
+    return _query(
+        "SELECT IdModelo, Nombre, Categoria, TiempoEstimado, PesoEstimado "
+        "FROM Modelos ORDER BY Nombre")
+
+
+def crear_modelo(nombre, categoria, tiempo_estimado, peso_estimado):
+    return _execute(
+        "INSERT INTO Modelos (Nombre, Categoria, TiempoEstimado, PesoEstimado) "
+        "OUTPUT INSERTED.IdModelo VALUES (?, ?, ?, ?)",
+        (nombre, categoria or None, tiempo_estimado, peso_estimado), return_id=True)
+
+
+def actualizar_modelo(id_modelo, nombre, categoria, tiempo_estimado, peso_estimado):
+    _execute(
+        "UPDATE Modelos SET Nombre=?, Categoria=?, TiempoEstimado=?, PesoEstimado=? WHERE IdModelo=?",
+        (nombre, categoria or None, tiempo_estimado, peso_estimado, id_modelo))
+
+
+def eliminar_modelo(id_modelo):
+    fila = _query("SELECT COUNT(*) FROM FabricacionObjetos WHERE IdModelo = ?",
+                  (id_modelo,), fetch="one")
+    if fila and fila[0] > 0:
+        raise RuntimeError("No se puede eliminar: el modelo tiene impresiones asociadas.")
+    _execute("DELETE FROM Modelos WHERE IdModelo = ?", (id_modelo,))

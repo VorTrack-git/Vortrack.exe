@@ -21,6 +21,22 @@ def _hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
+def _password_matches(entrada: str, almacenada) -> bool:
+    """Acepta contraseñas hasheadas (admin) o en texto plano (estudiantes)."""
+    if almacenada is None:
+        return False
+    guardada = str(almacenada)
+    es_hash = len(guardada) == 64 and all(c in "0123456789abcdefABCDEF" for c in guardada)
+    if es_hash:
+        return guardada.lower() == _hash_password(entrada).lower()
+    return guardada == entrada
+
+
+def is_admin() -> bool:
+    """True si la sesión activa pertenece a un administrador."""
+    return bool(_session) and _session.get("rol") == "Administrador"
+
+
 def authenticate(username: str, password: str) -> bool:
     """Valida credenciales contra la tabla Usuarios y abre sesión si son correctas."""
     global _session
@@ -48,7 +64,7 @@ def authenticate(username: str, password: str) -> bool:
         # Se propaga para que la UI muestre el error real (no "credenciales incorrectas").
         raise DatabaseUnavailable(str(exc)) from exc
 
-    if row is None or row.Contrasena != _hash_password(pwd):
+    if row is None or not _password_matches(pwd, row.Contrasena):
         _session = None
         return False
 

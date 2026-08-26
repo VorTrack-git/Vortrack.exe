@@ -625,6 +625,19 @@ class TransformacionApp:
             lbl_historico.pack(side="left", padx=16)
             lbl_historico.bind("<Button-1>", lambda _e: self.ir_a_historico())
 
+        # Botón de acceso al panel de administración (solo administradores)
+        if auth.is_admin() and self.on_navigate:
+            if ctk:
+                ctk.CTkButton(nav_items_frame, text="⚙ ADMIN", fg_color="transparent",
+                              hover_color=COLORS["surface_bright"], text_color=COLORS["primary_fixed"],
+                              font=(FONT_FAMILY, 11, "bold"), height=32, corner_radius=12,
+                              command=lambda: self.on_navigate("admin")).pack(side="left", padx=10)
+            else:
+                lbl_adm = tk.Label(nav_items_frame, text="⚙ ADMIN", fg=COLORS["primary_fixed"],
+                                   bg=COLORS["surface_container"], font=(FONT_FAMILY, 10, "bold"), cursor="hand2")
+                lbl_adm.pack(side="left", padx=16)
+                lbl_adm.bind("<Button-1>", lambda _e: self.on_navigate("admin"))
+
         # Right Action: Logout Button
         if ctk:
             btn_logout = ctk.CTkButton(

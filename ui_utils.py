@@ -280,6 +280,19 @@ def build_app_navbar(app):
         lbl_hist.pack(side="left", padx=16)
         lbl_hist.bind("<Button-1>", lambda _e: app.ir_a_historico())
 
+    # Acceso al panel de administración (solo para administradores).
+    import auth
+    if auth.is_admin() and getattr(app, "on_navigate", None):
+        if ctk:
+            ctk.CTkButton(nav_items_frame, text="⚙ ADMIN", fg_color="transparent", hover_color=COL["surface_bright"],
+                          text_color=COL["primary_fixed"], font=(FONT_FAMILY, 11, "bold"), height=32, corner_radius=12,
+                          command=lambda: app.on_navigate("admin")).pack(side="left", padx=10)
+        else:
+            lbl_adm = tk.Label(nav_items_frame, text="⚙ ADMIN", fg=COL["primary_fixed"], bg=COL["surface_container"],
+                               font=(FONT_FAMILY, 10, "bold"), cursor="hand2")
+            lbl_adm.pack(side="left", padx=16)
+            lbl_adm.bind("<Button-1>", lambda _e: app.on_navigate("admin"))
+
     if ctk:
         btn_logout = ctk.CTkButton(navbar_content, text="Logout", fg_color=COL["surface_low"], hover_color=COL["surface_bright"],
                                    border_color=COL["outline_variant"], border_width=1, text_color=COL["on_surface"],

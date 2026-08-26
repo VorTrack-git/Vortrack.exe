@@ -10,6 +10,7 @@ import recolec_ui
 import transformacion_ui
 import impresion_ui
 import historico_ui
+import admin_ui
 
 try:
     import customtkinter as ctk
@@ -65,7 +66,13 @@ def show_main_app(page: str = "inicio") -> str:
         result["next"] = "logout"
         root.quit()
 
-    if page == "recoleccion":
+    # El panel de administración solo es accesible para administradores.
+    if page == "admin" and not auth.is_admin():
+        page = "inicio"
+
+    if page == "admin":
+        admin_ui.AdminApp(root, on_navigate=navigate, on_logout=on_logout)
+    elif page == "recoleccion":
         recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout)
     elif page == "transformacion":
         transformacion_ui.TransformacionApp(root, on_navigate=navigate, on_logout=on_logout)
@@ -96,10 +103,11 @@ def run():
         if not auth.is_authenticated():
             continue
 
-        page = "inicio"
+        # El administrador entra a su panel; el resto, al sistema normal.
+        page = "admin" if auth.is_admin() else "inicio"
         while True:
             action = show_main_app(page)
-            if action in ("inicio", "recoleccion", "transformacion", "impresion", "historico"):
+            if action in ("inicio", "recoleccion", "transformacion", "impresion", "historico", "admin"):
                 page = action
                 continue
             if action == "logout":
