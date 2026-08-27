@@ -91,7 +91,8 @@ class FabricaWidgets:
             e.pack(fill="x", pady=pady_ctk)
         else:
             e = tk.Entry(parent, bg=c["surface_lowest"], fg=c["on_surface"],
-                         insertbackground=c["on_surface"], relief="flat", font=(self.font, 12))
+                         insertbackground=c["on_surface"], relief="flat", font=(self.font, 12),
+                         readonlybackground=c["surface_low"])
             e.pack(fill="x", pady=pady_tk, ipady=5)
         return e
 

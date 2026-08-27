@@ -1,59 +1,34 @@
 import os
 import tkinter as tk
 
-
 from tkinter import messagebox, ttk
 from datetime import datetime
 
 import auth
 import ui_utils
 import repositorio
+import validaciones
+from ui_tema import COLORS, FONT_FAMILY
+from widgets import FabricaWidgets
+
 try:
     from tkcalendar import DateEntry
 except ImportError:
     DateEntry = None
-
-from PIL import Image, ImageTk
 
 try:
     import customtkinter as ctk
 except ImportError:
     ctk = None
 
-COLORS = {
-    "background": "#051424",
-    "surface_lowest": "#010f1f",
-    "surface_low": "#0d1c2d",
-    "surface_container": "#122131",
-    "surface_high": "#1c2b3c",
-    "surface_highest": "#273647",
-    "surface_bright": "#2c3a4c",
-    "primary": "#dbfcff",
-    "primary_fixed": "#7df4ff",
-    "primary_fixed_dim": "#00dbe9",
-    "primary_container": "#00f0ff",
-    "secondary_container": "#0056fd",
-    "on_surface": "#d4e4fa",
-    "on_surface_variant": "#b9cacb",
-    "outline_variant": "#3b494b",
-    "error": "#ffb4ab",
-    "error_container": "#93000a",
-    "white": "#ffffff",
-    "success": "#2e7d32",
-    "success_hover": "#1b5e20",
-    "surface": "#0d1117"
-}
-
-FONT_FAMILY = "Segoe UI"
-
-RESPONSABLES = ["Seleccione responsable...", "Arnaldo", "Miguel", "Juan", "María"]
-
 
 class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
     """Formulario para registrar la producción de filamento 3D a partir de PET (extrusión)."""
 
-    def __init__(self, parent, on_register_callback=None, **kwargs):
+    def __init__(self, parent, on_register_callback=None, datos=None, fabrica=None, **kwargs):
         self.on_register_callback = on_register_callback
+        self.datos = datos or repositorio
+        self.fw = fabrica or FabricaWidgets()
         if ctk:
             super().__init__(parent, fg_color=COLORS["surface_container"], border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12, **kwargs)
         else:
@@ -62,23 +37,20 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
         self.setup_ui()
 
     def setup_ui(self):
-        # Título
+        # Título + subtítulo
         if ctk:
-            title = ctk.CTkLabel(self, text="Nueva Transformación", font=(FONT_FAMILY, 20, "bold"), text_color=COLORS["primary_fixed"])
-            title.pack(pady=(25, 4))
-            sub = ctk.CTkLabel(self, text="Producción de filamento 3D (extrusión de PET)", font=(FONT_FAMILY, 11), text_color=COLORS["on_surface_variant"])
-            sub.pack(pady=(0, 16))
+            ctk.CTkLabel(self, text="Nueva Transformación", font=(FONT_FAMILY, 20, "bold"), text_color=COLORS["primary_fixed"]).pack(pady=(25, 4))
+            ctk.CTkLabel(self, text="Producción de filamento 3D (extrusión de PET)", font=(FONT_FAMILY, 11), text_color=COLORS["on_surface_variant"]).pack(pady=(0, 16))
         else:
             tk.Label(self, text="Nueva Transformación", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 2))
             tk.Label(self, text="Producción de filamento 3D (extrusión de PET)", font=(FONT_FAMILY, 9), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(pady=(0, 12))
 
-        # Contenedor del formulario
         # Contenedor del formulario con scroll (evita que se corten campos/botón)
         form_frame = ui_utils.scrollable_form(
             self, COLORS["surface_container"], fill="both", expand=True, padx=30, pady=(0, 20))
 
         # 1. Fecha del Registro
-        self.create_label(form_frame, "Fecha del Registro")
+        self.fw.label_campo(form_frame, "Fecha del Registro")
 
         # Estilo ttk para que el Entry interno del DateEntry use colores oscuros
         _style = ttk.Style()
@@ -139,135 +111,50 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
 
         # 2. Jornada de recolección (origen del PET; su PesoPET es el peso ingresado)
         try:
-            self.jornadas = repositorio.listar_jornadas()
+            self.jornadas = self.datos.listar_jornadas()
         except Exception as exc:  # noqa: BLE001
             self.jornadas = []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar las jornadas:\n{exc}")
         self._jornada_by_label = {lab: (idj, peso) for idj, lab, peso in self.jornadas}
 
-        self.create_label(form_frame, "Jornada de recolección (origen del PET)")
+        self.fw.label_campo(form_frame, "Jornada de recolección (origen del PET)")
         jornada_values = ["Seleccione jornada..."] + [lab for _, lab, _ in self.jornadas]
-        self.jornada_combo, self.jornada_var = self._make_combo(
+        self.jornada_combo, self.jornada_var = self.fw.combo(
             form_frame, jornada_values, command=self._on_jornada)
 
         # 3. Peso ingresado (kg) — automático desde la jornada seleccionada
-        self.create_label(form_frame, "Peso ingresado (kg) — PET de la jornada")
-        self.ingresado_entry = self._make_entry(form_frame, "")
+        self.fw.label_campo(form_frame, "Peso ingresado (kg) — PET de la jornada")
+        self.ingresado_entry = self.fw.entry(form_frame, "")
         self._set_readonly(self.ingresado_entry, "—")
 
         # 4. Peso salido (kg)
-        self.create_label(form_frame, "Peso salido (kg) — filamento")
-        self.salido_entry = self._make_entry(form_frame, "Ej. 1.7")
+        self.fw.label_campo(form_frame, "Peso salido (kg) — filamento")
+        self.salido_entry = self.fw.entry(form_frame, "Ej. 1.7")
         self.salido_entry.bind("<KeyRelease>", self._update_desperdicio)
 
         # 5. Desperdicio (kg) — calculado automáticamente (ingresado - salido)
-        self.create_label(form_frame, "Desperdicio (kg) — automático")
-        self.desperdicio_entry = self._make_entry(form_frame, "")
+        self.fw.label_campo(form_frame, "Desperdicio (kg) — automático")
+        self.desperdicio_entry = self.fw.entry(form_frame, "")
         self._set_readonly(self.desperdicio_entry, "—")
 
         # 6. Color del filamento
-        self.create_label(form_frame, "Color del filamento")
-        self.color_entry = self._make_entry(form_frame, "Ej. Translúcido, Azul...")
+        self.fw.label_campo(form_frame, "Color del filamento")
+        self.color_entry = self.fw.entry(form_frame, "Ej. Translúcido, Azul...")
 
         # 7. Diámetro (mm)
-        self.create_label(form_frame, "Diámetro (mm)")
-        self.diam_entry = self._make_entry(form_frame, "Ej. 1.75")
+        self.fw.label_campo(form_frame, "Diámetro (mm)")
+        self.diam_entry = self.fw.entry(form_frame, "Ej. 1.75")
 
         # 8. Metros de filamento producidos
-        self.create_label(form_frame, "Metros de filamento producidos")
-        self.metros_entry = self._make_entry(form_frame, "Ej. 560")
+        self.fw.label_campo(form_frame, "Metros de filamento producidos")
+        self.metros_entry = self.fw.entry(form_frame, "Ej. 560")
 
-        # 7. Observaciones
-        self.create_label(form_frame, "Observaciones")
+        # 9. Observaciones
+        self.fw.label_campo(form_frame, "Observaciones")
+        self.obs_textbox = self.fw.textbox(form_frame, "Opcional...")
 
-        if ctk:
-            self.obs_textbox = ctk.CTkTextbox(
-                form_frame,
-                height=70,
-                fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"],
-                border_width=1,
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 13)
-            )
-            self.obs_textbox.insert("1.0", "Opcional...")
-            self.obs_textbox.bind("<FocusIn>", lambda e: self.clear_placeholder(self.obs_textbox, "Opcional..."))
-            self.obs_textbox.pack(fill="x", pady=(2, 25))
-        else:
-            self.obs_textbox = tk.Text(
-                form_frame,
-                height=3,
-                width=1,  # el ancho real lo da fill="x"; evita el default de 80 columnas
-                bg=COLORS["surface_lowest"],
-                fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"],
-                relief="flat",
-                font=(FONT_FAMILY, 12),
-                wrap="word"
-            )
-            self.obs_textbox.pack(fill="x", pady=(2, 15), ipady=4)
-
-        # 8. Botón Registrar
-        if ctk:
-            btn_registrar = ctk.CTkButton(
-                form_frame,
-                text="Registrar Filamento",
-                font=(FONT_FAMILY, 14, "bold"),
-                height=45,
-                fg_color=COLORS["success"],
-                hover_color=COLORS["success_hover"],
-                text_color=COLORS["white"],
-                corner_radius=8,
-                command=self.registrar
-            )
-            btn_registrar.pack(fill="x")
-        else:
-            tk.Button(form_frame, text="Registrar Filamento", bg=COLORS["success"], fg=COLORS["white"], command=self.registrar).pack(fill="x")
-
-    def _make_entry(self, parent, placeholder):
-        """Crea un campo de texto (ctk o tk) con el estilo del formulario."""
-        if ctk:
-            entry = ctk.CTkEntry(
-                parent,
-                placeholder_text=placeholder,
-                height=35,
-                fg_color=COLORS["surface_lowest"],
-                border_color=COLORS["outline_variant"],
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 13)
-            )
-            entry.pack(fill="x", pady=(2, 15))
-        else:
-            entry = tk.Entry(
-                parent,
-                bg=COLORS["surface_lowest"],
-                fg=COLORS["on_surface"],
-                insertbackground=COLORS["on_surface"],
-                relief="flat",
-                font=(FONT_FAMILY, 12),
-                readonlybackground=COLORS["surface_low"]
-            )
-            entry.pack(fill="x", pady=(2, 10), ipady=5)
-        return entry
-
-    def _make_combo(self, parent, values, command=None):
-        """Desplegable (ctk o tk). Devuelve (widget, var) — var es None en ctk."""
-        if ctk:
-            cb = ctk.CTkOptionMenu(
-                parent, values=values, height=35, command=command,
-                fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
-                button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
-            cb.set(values[0])
-            cb.pack(fill="x", pady=(2, 15))
-            return cb, None
-        var = tk.StringVar(value=values[0])
-        cb = tk.OptionMenu(parent, var, *values, command=command)
-        cb.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
-                  activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
-                  highlightthickness=0, bd=0)
-        cb.pack(fill="x", pady=(2, 10))
-        return cb, var
+        # 10. Botón Registrar
+        self.fw.boton(form_frame, "Registrar Filamento", self.registrar, tipo="primario")
 
     def _on_jornada(self, choice):
         """Al elegir jornada, muestra su PesoPET como 'peso ingresado' y recalcula."""
@@ -293,18 +180,6 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             texto = "—"
         self._set_readonly(self.desperdicio_entry, texto)
 
-    def create_label(self, parent, text):
-        if ctk:
-            lbl = ctk.CTkLabel(parent, text=text, font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"])
-            lbl.pack(anchor="w")
-        else:
-            tk.Label(parent, text=text, font=(FONT_FAMILY, 10, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(anchor="w")
-
-    def clear_placeholder(self, textbox, placeholder):
-        content = textbox.get("1.0", "end-1c")
-        if content.strip() == placeholder:
-            textbox.delete("1.0", "end")
-
     def registrar(self):
         fecha = self.date_entry.get()
         jornada_label = self.jornada_combo.get() if ctk else self.jornada_var.get()
@@ -323,44 +198,35 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
             return
         id_jornada, ingresado_val = info
 
-        if not salido:
+        if validaciones.es_vacio(salido):
             messagebox.showwarning("Error", "Debe ingresar el peso salido (filamento).")
             return
-        try:
-            salido_val = float(salido)
-        except ValueError:
-            messagebox.showwarning("Error", "El peso salido debe ser un número válido.")
-            return
-        if salido_val <= 0:
-            messagebox.showwarning("Error", "El peso salido debe ser mayor que cero.")
+        ok_salido, salido_val = validaciones.numero_positivo(salido)
+        if not ok_salido:
+            messagebox.showwarning("Error", "El peso salido debe ser un número mayor que cero.")
             return
         if salido_val > ingresado_val:
             messagebox.showwarning(
                 "Error", f"El peso salido no puede superar el ingresado ({ingresado_val:g} kg).")
             return
 
-        if not metros:
+        if validaciones.es_vacio(metros):
             messagebox.showwarning("Error", "Debe ingresar los metros de filamento producidos.")
             return
-        try:
-            metros_val = float(metros)
-        except ValueError:
-            messagebox.showwarning("Error", "Los metros deben ser un número válido.")
-            return
-        if metros_val <= 0:
-            messagebox.showwarning("Error", "Los metros deben ser mayores que cero.")
+        ok_metros, metros_val = validaciones.numero_positivo(metros)
+        if not ok_metros:
+            messagebox.showwarning("Error", "Los metros deben ser un número mayor que cero.")
             return
 
         diam_val = None
         if diam:
-            try:
-                diam_val = float(diam)
-            except ValueError:
+            ok_diam, diam_val = validaciones.numero(diam)
+            if not ok_diam:
                 messagebox.showwarning("Error", "El diámetro debe ser un número válido.")
                 return
 
         try:
-            id_prod = repositorio.crear_produccion(
+            id_prod = self.datos.crear_produccion(
                 id_jornada, fecha, color or None, diam_val, salido_val, metros_val, obs)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al guardar",
@@ -390,7 +256,9 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, datos=None, fabrica=None, **kwargs):
+        self.datos = datos or repositorio
+        self.fw = fabrica or FabricaWidgets()
         if ctk:
             super().__init__(parent, fg_color=COLORS["surface_container"], border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12, **kwargs)
         else:
@@ -399,29 +267,7 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         self.setup_ui()
 
     def setup_ui(self):
-        if ctk:
-            title = ctk.CTkLabel(self, text="Historial de Filamento", font=(FONT_FAMILY, 18, "bold"), text_color=COLORS["primary_fixed"])
-            title.pack(pady=(20, 15), padx=20, anchor="w")
-        else:
-            tk.Label(self, text="Historial de Filamento", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15), padx=20, anchor="w")
-
-        style = ttk.Style()
-        style.theme_use("default")
-        style.configure("Transf.Treeview",
-                        background=COLORS["surface"],
-                        foreground=COLORS["on_surface"],
-                        rowheight=35,
-                        fieldbackground=COLORS["surface"],
-                        bordercolor=COLORS["outline_variant"],
-                        borderwidth=0,
-                        font=(FONT_FAMILY, 11))
-        style.map('Transf.Treeview', background=[('selected', COLORS["surface_low"])])
-        style.configure("Transf.Treeview.Heading",
-                        background=COLORS["surface_high"],
-                        foreground=COLORS["on_surface_variant"],
-                        relief="flat",
-                        font=(FONT_FAMILY, 11, "bold"))
-        style.map("Transf.Treeview.Heading", background=[('active', COLORS["surface_bright"])])
+        self.fw.titulo(self, "Historial de Filamento", pady=(20, 15), padx=20, anchor="w")
 
         tree_frame = tk.Frame(self, bg=COLORS["surface_container"])
         tree_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
@@ -429,29 +275,18 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         tree_scroll = ttk.Scrollbar(tree_frame)
         tree_scroll.pack(side="right", fill="y")
 
-        columns = ("fecha", "jornada", "ingresado", "salido", "desperdicio", "color", "diametro", "metros", "observaciones")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Transf.Treeview", yscrollcommand=tree_scroll.set)
-
-        self.tree.heading("fecha", text="Fecha")
-        self.tree.heading("jornada", text="Jornada")
-        self.tree.heading("ingresado", text="Ingresado (kg)")
-        self.tree.heading("salido", text="Salido (kg)")
-        self.tree.heading("desperdicio", text="Desperdicio (kg)")
-        self.tree.heading("color", text="Color")
-        self.tree.heading("diametro", text="Diám. (mm)")
-        self.tree.heading("metros", text="Metros (m)")
-        self.tree.heading("observaciones", text="Observaciones")
-
-        self.tree.column("fecha", width=90, anchor="center", stretch=True)
-        self.tree.column("jornada", width=70, anchor="center", stretch=True)
-        self.tree.column("ingresado", width=100, anchor="center", stretch=True)
-        self.tree.column("salido", width=90, anchor="center", stretch=True)
-        self.tree.column("desperdicio", width=110, anchor="center", stretch=True)
-        self.tree.column("color", width=100, anchor="w", stretch=True)
-        self.tree.column("diametro", width=85, anchor="center", stretch=True)
-        self.tree.column("metros", width=90, anchor="center", stretch=True)
-        self.tree.column("observaciones", width=170, anchor="w", stretch=True)
-
+        columnas = [
+            ("fecha", "Fecha", 90, "center"),
+            ("jornada", "Jornada", 70, "center"),
+            ("ingresado", "Ingresado (kg)", 100, "center"),
+            ("salido", "Salido (kg)", 90, "center"),
+            ("desperdicio", "Desperdicio (kg)", 110, "center"),
+            ("color", "Color", 100, "w"),
+            ("diametro", "Diám. (mm)", 85, "center"),
+            ("metros", "Metros (m)", 90, "center"),
+            ("observaciones", "Observaciones", 170, "w"),
+        ]
+        self.tree = self.fw.tabla(tree_frame, columnas, "Transf.Treeview", yscrollcommand=tree_scroll.set)
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
@@ -462,7 +297,7 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         for item in self.tree.get_children():
             self.tree.delete(item)
         try:
-            filas = repositorio.producciones_recientes()
+            filas = self.datos.producciones_recientes()
         except Exception:  # noqa: BLE001
             return
         for fecha, id_jornada, color, diametro, peso_pet, peso_obt, metros, obs in filas:
@@ -478,10 +313,12 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class TransformacionApp:
-    def __init__(self, root, on_navigate=None, on_logout=None):
+    def __init__(self, root, on_navigate=None, on_logout=None, datos=None, fabrica=None):
         self.root = root
         self.on_navigate = on_navigate
         self.on_logout = on_logout
+        self.datos = datos or repositorio
+        self.fw = fabrica or FabricaWidgets()
         self.root.title("VorTrack - Transformación")
         self.root.minsize(1024, 700)
         ui_utils.maximize_window(self.root)
@@ -505,171 +342,9 @@ class TransformacionApp:
         self.main_container = tk.Frame(self.root, bg=COLORS["background"])
         self.main_container.pack(fill="both", expand=True)
 
-        self.build_navbar()
+        ui_utils.build_app_navbar(self)
         self.build_main_content()
-        self.build_footer()
-
-    def build_navbar(self):
-        navbar_outer = tk.Frame(self.main_container, bg=COLORS["surface_container"], height=70)
-        navbar_outer.pack(fill="x", side="top")
-        navbar_outer.pack_propagate(False)
-
-        border_bottom = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)
-        border_bottom.pack(fill="x", side="top")
-
-        navbar_content = tk.Frame(navbar_outer, bg=COLORS["surface_container"])
-        navbar_content.pack(fill="both", expand=True, padx=24, pady=10)
-
-        # Left: Brand Logo & Title
-        brand_frame = tk.Frame(navbar_content, bg=COLORS["surface_container"])
-        brand_frame.pack(side="left")
-
-        self.nav_icon_img = self.load_ctk_image(self.icon_path, size=(38, 38))
-        if self.nav_icon_img:
-            if ctk:
-                icon_lbl = ctk.CTkLabel(brand_frame, image=self.nav_icon_img, text="")
-            else:
-                icon_lbl = tk.Label(brand_frame, image=self.nav_icon_img, bg=COLORS["surface_container"])
-            icon_lbl.pack(side="left", padx=(0, 10))
-
-        brand_text = tk.Label(
-            brand_frame,
-            text="VorTrack",
-            fg=COLORS["primary_fixed"],
-            bg=COLORS["surface_container"],
-            font=(FONT_FAMILY, 20, "bold")
-        )
-        brand_text.pack(side="left")
-
-        # Center Navigation Menu
-        nav_items_frame = tk.Frame(navbar_content, bg=COLORS["surface_container"])
-        nav_items_frame.pack(side="left", expand=True)
-
-        # Item 1: Quienes Somos (vuelve a la página de inicio)
-        lbl_quienes = tk.Label(
-            nav_items_frame,
-            text="QUIÉNES SOMOS",
-            fg=COLORS["on_surface_variant"],
-            bg=COLORS["surface_container"],
-            font=(FONT_FAMILY, 10, "bold"),
-            cursor="hand2"
-        )
-        lbl_quienes.pack(side="left", padx=16)
-        lbl_quienes.bind("<Button-1>", lambda _e: self.ir_a_inicio())
-
-        # Item 2: Registrar Dropdown Button
-        if ctk:
-            self.registrar_btn = ctk.CTkOptionMenu(
-                nav_items_frame,
-                values=["REGISTRAR ▾", "Recolección", "Transformación", "Impresión"],
-                fg_color=COLORS["surface_container"],
-                button_color=COLORS["surface_high"],
-                button_hover_color=COLORS["surface_bright"],
-                text_color=COLORS["on_surface_variant"],
-                dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["surface_bright"],
-                dropdown_text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 11, "bold"),
-                dynamic_resizing=False,
-                width=130,
-                height=32,
-                corner_radius=12,
-                command=self.on_registrar_select
-            )
-            self.registrar_btn.set("REGISTRAR ▾")
-            self.registrar_btn.pack(side="left", padx=10)
-        else:
-            registrar_btn = tk.Menubutton(
-                nav_items_frame,
-                text="REGISTRAR ▾",
-                fg=COLORS["on_surface_variant"],
-                bg=COLORS["surface_container"],
-                activebackground=COLORS["surface_bright"],
-                activeforeground=COLORS["primary_fixed"],
-                font=(FONT_FAMILY, 10, "bold"),
-                bd=0,
-                cursor="hand2"
-            )
-            registrar_menu = tk.Menu(registrar_btn, tearoff=0, bg=COLORS["surface_container"], fg=COLORS["on_surface"])
-            registrar_menu.add_command(label="Recolección", command=lambda: self.on_registrar_select("Recolección"))
-            registrar_menu.add_command(label="Transformación", command=lambda: self.on_registrar_select("Transformación"))
-            registrar_menu.add_command(label="Impresión", command=lambda: self.on_registrar_select("Impresión"))
-            registrar_btn.config(menu=registrar_menu)
-            registrar_btn.pack(side="left", padx=16)
-
-        # Item 3: Histórico Informes
-        if ctk:
-            btn_historico = ctk.CTkButton(
-                nav_items_frame,
-                text="HISTÓRICO INFORMES",
-                fg_color="transparent",
-                hover_color=COLORS["surface_bright"],
-                text_color=COLORS["on_surface_variant"],
-                font=(FONT_FAMILY, 11, "bold"),
-                height=32,
-                corner_radius=12,
-                command=self.ir_a_historico
-            )
-            btn_historico.pack(side="left", padx=10)
-        else:
-            lbl_historico = tk.Label(
-                nav_items_frame,
-                text="HISTÓRICO INFORMES",
-                fg=COLORS["on_surface_variant"],
-                bg=COLORS["surface_container"],
-                font=(FONT_FAMILY, 10, "bold"),
-                cursor="hand2"
-            )
-            lbl_historico.pack(side="left", padx=16)
-            lbl_historico.bind("<Button-1>", lambda _e: self.ir_a_historico())
-
-        # Botón de acceso al panel de administración (solo administradores)
-        if auth.is_admin() and self.on_navigate:
-            if ctk:
-                ctk.CTkButton(nav_items_frame, text="⚙ ADMIN", fg_color="transparent",
-                              hover_color=COLORS["surface_bright"], text_color=COLORS["primary_fixed"],
-                              font=(FONT_FAMILY, 11, "bold"), height=32, corner_radius=12,
-                              command=lambda: self.on_navigate("admin")).pack(side="left", padx=10)
-            else:
-                lbl_adm = tk.Label(nav_items_frame, text="⚙ ADMIN", fg=COLORS["primary_fixed"],
-                                   bg=COLORS["surface_container"], font=(FONT_FAMILY, 10, "bold"), cursor="hand2")
-                lbl_adm.pack(side="left", padx=16)
-                lbl_adm.bind("<Button-1>", lambda _e: self.on_navigate("admin"))
-
-        # Right Action: Logout Button
-        if ctk:
-            btn_logout = ctk.CTkButton(
-                navbar_content,
-                text="Logout",
-                fg_color=COLORS["surface_low"],
-                hover_color=COLORS["surface_bright"],
-                border_color=COLORS["outline_variant"],
-                border_width=1,
-                text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 11, "bold"),
-                corner_radius=12,
-                width=100,
-                height=36,
-                command=self.logout
-            )
-            btn_logout.pack(side="right")
-        else:
-            btn_logout = tk.Button(
-                navbar_content,
-                text="Logout",
-                fg=COLORS["on_surface"],
-                bg=COLORS["surface_low"],
-                activebackground=COLORS["surface_bright"],
-                activeforeground=COLORS["primary_fixed"],
-                font=(FONT_FAMILY, 10, "bold"),
-                bd=1,
-                relief="solid",
-                padx=16,
-                pady=6,
-                cursor="hand2",
-                command=self.logout
-            )
-            btn_logout.pack(side="right")
+        ui_utils.build_app_footer(self)
 
     def build_main_content(self):
         self.canvas_frame = tk.Frame(self.main_container, bg=COLORS["background"])
@@ -681,46 +356,15 @@ class TransformacionApp:
         self.canvas_frame.grid_columnconfigure(0, weight=0, minsize=440)
         self.canvas_frame.grid_columnconfigure(1, weight=1)
 
-        self.form = TransformacionForm(self.canvas_frame, on_register_callback=self.on_new_record)
+        self.form = TransformacionForm(self.canvas_frame, on_register_callback=self.on_new_record,
+                                       datos=self.datos, fabrica=self.fw)
         self.form.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
 
-        self.recent_records = RecentTransformacionesFrame(self.canvas_frame)
+        self.recent_records = RecentTransformacionesFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
     def on_new_record(self):
         self.recent_records.recargar()
-
-    def build_footer(self):
-        border_top = tk.Frame(self.main_container, bg=COLORS["outline_variant"], height=1)
-        border_top.pack(fill="x", side="top")
-
-        footer_frame = tk.Frame(self.main_container, bg=COLORS["surface_lowest"], height=65)
-        footer_frame.pack(fill="x", side="bottom")
-        footer_frame.pack_propagate(False)
-
-        footer_content = tk.Frame(footer_frame, bg=COLORS["surface_lowest"])
-        footer_content.pack(fill="both", expand=True, padx=24, pady=10)
-
-        left_foot = tk.Frame(footer_content, bg=COLORS["surface_lowest"])
-        left_foot.pack(side="left")
-
-        brand_lbl = tk.Label(left_foot, text="VorTrack", fg=COLORS["primary_fixed"], bg=COLORS["surface_lowest"], font=(FONT_FAMILY, 12, "bold"))
-        brand_lbl.pack(side="left", padx=(0, 10))
-
-        copy_lbl = tk.Label(left_foot, text="© 2026 desarrollado por Miguel Ruiz Ramirez", fg=COLORS["on_surface_variant"], bg=COLORS["surface_lowest"], font=(FONT_FAMILY, 9))
-        copy_lbl.pack(side="left")
-
-        right_foot = tk.Frame(footer_content, bg=COLORS["surface_lowest"])
-        right_foot.pack(side="right")
-
-        for link in ["Privacidad", "Términos de Uso", "Contacto", "Soporte Técnico"]:
-            lbl_link = tk.Label(right_foot, text=link, fg=COLORS["on_surface_variant"], bg=COLORS["surface_lowest"], font=(FONT_FAMILY, 9, "bold"))
-            lbl_link.pack(side="left", padx=10)
-            ui_utils.bind_footer_link(
-                lbl_link, self.root, link,
-                base_fg=COLORS["on_surface_variant"],
-                hover_fg=COLORS["primary_fixed"]
-            )
 
     def ir_a_inicio(self):
         if self.on_navigate:
