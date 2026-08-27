@@ -17,25 +17,23 @@ from tkinter import messagebox, ttk
 import auth
 import ui_utils
 import repositorio
+import validaciones
+from ui_tema import COLORS, FONT_FAMILY
 
 try:
     import customtkinter as ctk
 except ImportError:
     ctk = None
 
-from PIL import Image, ImageTk  # noqa: F401  (se usa en el ícono vía ui_utils)
-
-COLORS = ui_utils.COLORS
-FONT_FAMILY = ui_utils.FONT_FAMILY
-
 
 class AdminApp:
     PAGE = "admin"
 
-    def __init__(self, root, on_navigate=None, on_logout=None):
+    def __init__(self, root, on_navigate=None, on_logout=None, datos=None):
         self.root = root
         self.on_navigate = on_navigate
         self.on_logout = on_logout
+        self.datos = datos or repositorio
         self.root.title("VorTrack - Panel de administración")
         self.root.minsize(1024, 700)
         ui_utils.maximize_window(self.root)
@@ -286,7 +284,7 @@ class AdminApp:
         for it in self.est_tree.get_children():
             self.est_tree.delete(it)
         try:
-            filas = repositorio.listar_estudiantes()
+            filas = self.datos.listar_estudiantes()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar la lista:\n{exc}")
             return
@@ -332,7 +330,7 @@ class AdminApp:
             return
         nombres, apellidos, correo, telefono, pwd, _estado = datos
         try:
-            repositorio.crear_estudiante(nombres, apellidos, correo, telefono, pwd)
+            self.datos.crear_estudiante(nombres, apellidos, correo, telefono, pwd)
         except ValueError as exc:
             messagebox.showwarning("Error", str(exc)); return
         except Exception as exc:  # noqa: BLE001
@@ -349,7 +347,7 @@ class AdminApp:
             return
         nombres, apellidos, correo, telefono, pwd, estado = datos
         try:
-            repositorio.actualizar_estudiante(self._est_selected, nombres, apellidos, correo, telefono, pwd, estado)
+            self.datos.actualizar_estudiante(self._est_selected, nombres, apellidos, correo, telefono, pwd, estado)
         except ValueError as exc:
             messagebox.showwarning("Error", str(exc)); return
         except Exception as exc:  # noqa: BLE001
@@ -363,7 +361,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar este estudiante? Esta acción no se puede deshacer."):
             return
         try:
-            repositorio.eliminar_estudiante(self._est_selected)
+            self.datos.eliminar_estudiante(self._est_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al eliminar", str(exc)); return
         self._est_limpiar()
@@ -424,7 +422,7 @@ class AdminApp:
         for it in self.lug_tree.get_children():
             self.lug_tree.delete(it)
         try:
-            filas = repositorio.listar_lugares_admin()
+            filas = self.datos.listar_lugares_admin()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
         for n, (idl, nombre, desc) in enumerate(filas, start=1):
@@ -443,7 +441,7 @@ class AdminApp:
         if not nombre:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
         try:
-            repositorio.crear_lugar(nombre, self.l_desc.get().strip())
+            self.datos.crear_lugar(nombre, self.l_desc.get().strip())
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al guardar", str(exc)); return
         messagebox.showinfo("Lugar", "Lugar creado.")
@@ -456,7 +454,7 @@ class AdminApp:
         if not nombre:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
         try:
-            repositorio.actualizar_lugar(self._lug_selected, nombre, self.l_desc.get().strip())
+            self.datos.actualizar_lugar(self._lug_selected, nombre, self.l_desc.get().strip())
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
         messagebox.showinfo("Lugar", "Lugar actualizado.")
@@ -468,7 +466,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar este lugar?"):
             return
         try:
-            repositorio.eliminar_lugar(self._lug_selected)
+            self.datos.eliminar_lugar(self._lug_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("No se puede eliminar", str(exc)); return
         self._lug_refrescar()
@@ -521,7 +519,7 @@ class AdminApp:
         for it in self.mod_tree.get_children():
             self.mod_tree.delete(it)
         try:
-            filas = repositorio.listar_modelos_admin()
+            filas = self.datos.listar_modelos_admin()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
         for n, (idm, nombre, cat, tiempo, peso) in enumerate(filas, start=1):
@@ -546,16 +544,15 @@ class AdminApp:
         tiempo = None
         t = self.m_tiempo.get().strip()
         if t:
-            try:
-                tiempo = int(float(t))
-            except ValueError:
+            ok, val = validaciones.numero(t)
+            if not ok:
                 messagebox.showwarning("Error", "El tiempo debe ser un número."); return None
+            tiempo = int(val)
         peso = None
         p = self.m_peso.get().strip()
         if p:
-            try:
-                peso = float(p)
-            except ValueError:
+            ok, peso = validaciones.numero(p)
+            if not ok:
                 messagebox.showwarning("Error", "El peso debe ser un número."); return None
         return nombre, self.m_categoria.get().strip(), tiempo, peso
 
@@ -564,7 +561,7 @@ class AdminApp:
         if not datos:
             return
         try:
-            repositorio.crear_modelo(*datos)
+            self.datos.crear_modelo(*datos)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al guardar", str(exc)); return
         messagebox.showinfo("Modelo", "Modelo creado.")
@@ -577,7 +574,7 @@ class AdminApp:
         if not datos:
             return
         try:
-            repositorio.actualizar_modelo(self._mod_selected, *datos)
+            self.datos.actualizar_modelo(self._mod_selected, *datos)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
         messagebox.showinfo("Modelo", "Modelo actualizado.")
@@ -589,7 +586,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar este modelo?"):
             return
         try:
-            repositorio.eliminar_modelo(self._mod_selected)
+            self.datos.eliminar_modelo(self._mod_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("No se puede eliminar", str(exc)); return
         self._mod_refrescar()
@@ -607,8 +604,8 @@ class AdminApp:
         self._rec_selected = None
 
         try:
-            self._responsables = repositorio.listar_responsables()
-            self._lugares = repositorio.listar_lugares()
+            self._responsables = self.datos.listar_responsables()
+            self._lugares = self.datos.listar_lugares()
         except Exception as exc:  # noqa: BLE001
             self._responsables, self._lugares = [], []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar catálogos:\n{exc}")
@@ -661,7 +658,7 @@ class AdminApp:
         for it in self.rec_tree.get_children():
             self.rec_tree.delete(it)
         try:
-            filas = repositorio.recolecciones_admin()
+            filas = self.datos.recolecciones_admin()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}")
             return
@@ -695,19 +692,17 @@ class AdminApp:
             messagebox.showwarning("Error", "Seleccione responsable y lugar válidos."); return
         peso = self.r_peso.get().strip()
         botellas = self.r_botellas.get().strip()
-        try:
-            peso_val = float(peso)
-        except ValueError:
+        ok_peso, peso_val = validaciones.numero(peso)
+        if not ok_peso:
             messagebox.showwarning("Error", "El peso debe ser un número válido."); return
         botellas_val = None
         if botellas:
-            try:
-                botellas_val = int(botellas)
-            except ValueError:
+            ok_bot, botellas_val = validaciones.entero_positivo(botellas)
+            if not ok_bot:
                 messagebox.showwarning("Error", "Botellas debe ser un entero."); return
         obs = self.r_obs.get().strip()
         try:
-            repositorio.actualizar_jornada(self._rec_selected, fecha, id_lug, id_resp, botellas_val, peso_val, obs)
+            self.datos.actualizar_jornada(self._rec_selected, fecha, id_lug, id_resp, botellas_val, peso_val, obs)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
         messagebox.showinfo("Recolección", "Recolección actualizada.")
@@ -719,7 +714,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta recolección?"):
             return
         try:
-            repositorio.eliminar_jornada(self._rec_selected)
+            self.datos.eliminar_jornada(self._rec_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("No se puede eliminar", str(exc)); return
         self._rec_selected = None
@@ -731,7 +726,7 @@ class AdminApp:
         self._cambiar_seg_highlight("transformaciones")
         self._trans_selected = None
         try:
-            self._jornadas = repositorio.listar_jornadas()
+            self._jornadas = self.datos.listar_jornadas()
         except Exception as exc:  # noqa: BLE001
             self._jornadas = []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar jornadas:\n{exc}")
@@ -776,7 +771,7 @@ class AdminApp:
         for it in self.trans_tree.get_children():
             self.trans_tree.delete(it)
         try:
-            filas = repositorio.producciones_admin()
+            filas = self.datos.producciones_admin()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
         for idp, fecha, idj, color, diam, salido, metros, obs in filas:
@@ -807,20 +802,18 @@ class AdminApp:
         id_jornada = self._jornada_id_by_lbl.get(jlbl)
         if id_jornada is None:
             messagebox.showwarning("Error", "Seleccione una jornada de origen válida."); return
-        try:
-            salido_val = float(self.t_salido.get().strip())
-            metros_val = float(self.t_metros.get().strip())
-        except ValueError:
+        ok_s, salido_val = validaciones.numero(self.t_salido.get().strip())
+        ok_m, metros_val = validaciones.numero(self.t_metros.get().strip())
+        if not (ok_s and ok_m):
             messagebox.showwarning("Error", "Peso salido y metros deben ser numéricos."); return
         diam_val = None
         d = self.t_diam.get().strip()
         if d:
-            try:
-                diam_val = float(d)
-            except ValueError:
+            ok_d, diam_val = validaciones.numero(d)
+            if not ok_d:
                 messagebox.showwarning("Error", "Diámetro inválido."); return
         try:
-            repositorio.actualizar_produccion(self._trans_selected, id_jornada, self.t_fecha.get().strip(),
+            self.datos.actualizar_produccion(self._trans_selected, id_jornada, self.t_fecha.get().strip(),
                                               self.t_color.get().strip(), diam_val, salido_val, metros_val,
                                               self.t_obs.get().strip())
         except Exception as exc:  # noqa: BLE001
@@ -834,7 +827,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta transformación?"):
             return
         try:
-            repositorio.eliminar_produccion(self._trans_selected)
+            self.datos.eliminar_produccion(self._trans_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("No se puede eliminar", str(exc)); return
         self._trans_selected = None
@@ -846,8 +839,8 @@ class AdminApp:
         self._cambiar_seg_highlight("impresiones")
         self._imp_selected = None
         try:
-            self._modelos = repositorio.listar_modelos()
-            self._producciones = repositorio.listar_producciones()
+            self._modelos = self.datos.listar_modelos()
+            self._producciones = self.datos.listar_producciones()
         except Exception as exc:  # noqa: BLE001
             self._modelos, self._producciones = [], []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar catálogos:\n{exc}")
@@ -894,7 +887,7 @@ class AdminApp:
         for it in self.imp_tree.get_children():
             self.imp_tree.delete(it)
         try:
-            filas = repositorio.fabricaciones_admin()
+            filas = self.datos.fabricaciones_admin()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
         for idf, fecha, _idm, modelo, idp, cant, peso, tiempo, estado in filas:
@@ -929,14 +922,14 @@ class AdminApp:
         id_prod = self._prod_id_by_lbl.get(plbl)
         if id_modelo is None or id_prod is None:
             messagebox.showwarning("Error", "Seleccione modelo y producción válidos."); return
-        try:
-            cantidad = int(self.i_cantidad.get().strip())
-            peso = float(self.i_peso.get().strip())
-            tiempo = int(float(self.i_tiempo.get().strip()))
-        except ValueError:
+        ok_c, cantidad = validaciones.entero_positivo(self.i_cantidad.get().strip())
+        ok_p, peso = validaciones.numero(self.i_peso.get().strip())
+        ok_t, tiempo_f = validaciones.numero(self.i_tiempo.get().strip())
+        if not (ok_c and ok_p and ok_t):
             messagebox.showwarning("Error", "Piezas, peso y tiempo deben ser numéricos."); return
+        tiempo = int(tiempo_f)
         try:
-            repositorio.actualizar_fabricacion(self._imp_selected, id_modelo, id_prod,
+            self.datos.actualizar_fabricacion(self._imp_selected, id_modelo, id_prod,
                                                self.i_fecha.get().strip(), cantidad, peso, tiempo, estado)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
@@ -949,7 +942,7 @@ class AdminApp:
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta impresión?"):
             return
         try:
-            repositorio.eliminar_fabricacion(self._imp_selected)
+            self.datos.eliminar_fabricacion(self._imp_selected)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al eliminar", str(exc)); return
         self._imp_selected = None

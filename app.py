@@ -11,11 +11,18 @@ import transformacion_ui
 import impresion_ui
 import historico_ui
 import admin_ui
+from contenedor import Contenedor
+from widgets import FabricaWidgets
 
 try:
     import customtkinter as ctk
 except ImportError:
     ctk = None
+
+# Raíz de composición: se construyen una sola vez las dependencias concretas
+# (capa de datos + servicios) y la fábrica de widgets, y se inyectan en la UI.
+_cont = Contenedor()
+_fabrica = FabricaWidgets()
 
 
 def _create_root():
@@ -71,15 +78,19 @@ def show_main_app(page: str = "inicio") -> str:
         page = "inicio"
 
     if page == "admin":
-        admin_ui.AdminApp(root, on_navigate=navigate, on_logout=on_logout)
+        admin_ui.AdminApp(root, on_navigate=navigate, on_logout=on_logout, datos=_cont.datos)
     elif page == "recoleccion":
-        recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout)
+        recolec_ui.RecoleccionesApp(root, on_navigate=navigate, on_logout=on_logout,
+                                    datos=_cont.datos, fabrica=_fabrica)
     elif page == "transformacion":
-        transformacion_ui.TransformacionApp(root, on_navigate=navigate, on_logout=on_logout)
+        transformacion_ui.TransformacionApp(root, on_navigate=navigate, on_logout=on_logout,
+                                            datos=_cont.datos, fabrica=_fabrica)
     elif page == "impresion":
-        impresion_ui.ImpresionApp(root, on_navigate=navigate, on_logout=on_logout)
+        impresion_ui.ImpresionApp(root, on_navigate=navigate, on_logout=on_logout,
+                                  datos=_cont.datos, proyeccion=_cont.proyeccion, fabrica=_fabrica)
     elif page == "historico":
-        historico_ui.HistoricoApp(root, on_navigate=navigate, on_logout=on_logout)
+        historico_ui.HistoricoApp(root, on_navigate=navigate, on_logout=on_logout,
+                                  datos=_cont.datos, proyeccion=_cont.proyeccion, fabrica=_fabrica)
     else:
         inicio_ui.VorTrackApp(root, on_navigate=navigate, on_logout=on_logout)
 

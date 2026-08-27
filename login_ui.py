@@ -4,8 +4,7 @@ from tkinter import messagebox
 
 import auth
 import ui_utils
-# pyrefly: ignore [missing-import]
-from PIL import Image, ImageTk
+import validaciones
 
 try:
     # pyrefly: ignore [missing-import]
@@ -36,9 +35,12 @@ COLORS = {
 FONT_FAMILY = "Segoe UI"
 
 class LoginApp:
-    def __init__(self, root, on_success=None):
+    def __init__(self, root, on_success=None, servicio_auth=None):
         self.root = root
         self.on_success = on_success
+        # Servicio de autenticación inyectable (por defecto, el facade auth que
+        # envuelve ServicioAuth). Permite sustituirlo en pruebas.
+        self.autenticador = servicio_auth or auth
         self.root.title("VorTrack - Login")
         self.root.minsize(860, 700)
         ui_utils.maximize_window(self.root)
@@ -336,7 +338,7 @@ class LoginApp:
         self.toggle_pass_btn.configure(text="Ocultar" if self.pass_visible else "Ver")
 
     def _load_remembered_user(self):
-        remembered = auth.load_remembered_user()
+        remembered = self.autenticador.load_remembered_user()
         if remembered:
             self.user_entry.insert(0, remembered)
             self.remember_var.set(True)
@@ -356,12 +358,12 @@ class LoginApp:
         user = self.user_entry.get()
         pwd = self.pass_entry.get()
 
-        if user.strip() == "" or pwd.strip() == "":
+        if validaciones.es_vacio(user) or validaciones.es_vacio(pwd):
             messagebox.showwarning("Campos Requeridos", "Por favor ingrese su identificador y credencial de acceso.")
             return
 
         try:
-            autenticado = auth.authenticate(user, pwd)
+            autenticado = self.autenticador.authenticate(user, pwd)
         except auth.DatabaseUnavailable as exc:
             messagebox.showerror(
                 "Error de conexión",
@@ -380,9 +382,9 @@ class LoginApp:
             return
 
         if self.remember_var.get():
-            auth.save_remembered_user(user)
+            self.autenticador.save_remembered_user(user)
         else:
-            auth.clear_remembered_user()
+            self.autenticador.clear_remembered_user()
 
         if self.on_success:
             self.on_success()
