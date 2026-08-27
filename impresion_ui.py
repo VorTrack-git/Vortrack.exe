@@ -72,11 +72,9 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             tk.Label(self, text="Nueva Impresión", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 2))
             tk.Label(self, text="Fabricación de material didáctico (impresión 3D)", font=(FONT_FAMILY, 9), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(pady=(0, 12))
 
-        if ctk:
-            form_frame = ctk.CTkFrame(self, fg_color="transparent")
-        else:
-            form_frame = tk.Frame(self, bg=COLORS["surface_container"])
-        form_frame.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        # Contenedor del formulario con scroll (evita que se corten campos/botón)
+        form_frame = ui_utils.scrollable_form(
+            self, COLORS["surface_container"], fill="both", expand=True, padx=30, pady=(0, 20))
 
         # 1. Fecha del Registro
         self.create_label(form_frame, "Fecha del Registro")
@@ -135,18 +133,20 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
 
         # Catálogos desde la base de datos (FK obligatorias)
         try:
-            self.modelos = repositorio.listar_modelos()
+            self.modelos = repositorio.listar_modelos_admin()   # (id, nombre, cat, tiempo_h, peso_g)
             self.producciones = repositorio.listar_producciones()
         except Exception as exc:  # noqa: BLE001
             self.modelos, self.producciones = [], []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar los catálogos:\n{exc}")
-        self._modelo_by_name = {n: i for i, n in self.modelos}
+        self._modelo_by_name = {row[1]: row[0] for row in self.modelos}
+        # estimados por modelo: (tiempo_estimado_horas, peso_estimado_gramos)
+        self._modelo_estimados = {row[1]: (row[3], row[4]) for row in self.modelos}
         self._prod_by_label = {lab: idp for idp, lab, _ in self.producciones}
 
         # 2. Modelo (material didáctico)
         self.create_label(form_frame, "Modelo (material didáctico)")
-        modelo_values = ["Seleccione modelo..."] + [n for _, n in self.modelos]
-        self.modelo_combo, self.modelo_var = self._make_combo(form_frame, modelo_values)
+        modelo_values = ["Seleccione modelo..."] + [row[1] for row in self.modelos]
+        self.modelo_combo, self.modelo_var = self._make_combo(form_frame, modelo_values, command=self._proyectar)
 
         # 3. Producción de filamento utilizada
         self.create_label(form_frame, "Filamento utilizado (producción)")
@@ -156,6 +156,7 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
         # 4. Cantidad de piezas
         self.create_label(form_frame, "Cantidad de piezas")
         self.piezas_entry = self._make_entry(form_frame, "Ej. 3")
+        self.piezas_entry.bind("<KeyRelease>", self._proyectar)
 
         # 5. Peso de filamento utilizado (g)
         self.create_label(form_frame, "Peso de filamento utilizado (g)")
@@ -196,11 +197,11 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             entry.pack(fill="x", pady=(2, 10), ipady=5)
         return entry
 
-    def _make_combo(self, parent, values):
+    def _make_combo(self, parent, values, command=None):
         """Desplegable (ctk o tk). Devuelve (widget, var) — var es None en ctk."""
         if ctk:
             cb = ctk.CTkOptionMenu(
-                parent, values=values, height=35,
+                parent, values=values, height=35, command=command,
                 fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
                 button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
                 dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
@@ -208,12 +209,32 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             cb.pack(fill="x", pady=(2, 15))
             return cb, None
         var = tk.StringVar(value=values[0])
-        cb = tk.OptionMenu(parent, var, *values)
+        cb = tk.OptionMenu(parent, var, *values, command=command)
         cb.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"],
                   activebackground=COLORS["surface_high"], activeforeground=COLORS["on_surface"],
                   highlightthickness=0, bd=0)
         cb.pack(fill="x", pady=(2, 10))
         return cb, var
+
+    def _proyectar(self, _event=None):
+        """Proyecta peso (g) y tiempo (min) según el modelo elegido y la cantidad."""
+        nombre = self.modelo_combo.get() if ctk else self.modelo_var.get()
+        est = self._modelo_estimados.get(nombre)
+        if not est:
+            return
+        tiempo_h, peso_g = est
+        try:
+            cantidad = int(self.piezas_entry.get().strip())
+        except ValueError:
+            cantidad = 1
+        if cantidad <= 0:
+            cantidad = 1
+        if peso_g is not None:
+            self.filamento_entry.delete(0, "end")
+            self.filamento_entry.insert(0, f"{float(peso_g) * cantidad:g}")
+        if tiempo_h is not None:
+            self.tiempo_entry.delete(0, "end")
+            self.tiempo_entry.insert(0, f"{int(round(float(tiempo_h) * 60 * cantidad))}")
 
     def create_label(self, parent, text):
         if ctk:

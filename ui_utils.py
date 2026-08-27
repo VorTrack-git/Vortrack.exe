@@ -111,6 +111,35 @@ def set_window_icon(root):
         pass
 
 
+def scrollable_form(parent, bg, **pack_kwargs):
+    """Crea un contenedor con scroll vertical y lo empaqueta en `parent`.
+
+    Devuelve el frame donde se deben agregar los campos. Con customtkinter usa
+    CTkScrollableFrame (scrollbar + rueda del ratón automáticos); sin él, un
+    Canvas con barra de desplazamiento.
+    """
+    if ctk:
+        sf = ctk.CTkScrollableFrame(parent, fg_color="transparent")
+        sf.pack(**pack_kwargs)
+        return sf
+
+    outer = tk.Frame(parent, bg=bg)
+    outer.pack(**pack_kwargs)
+    canvas = tk.Canvas(outer, bg=bg, highlightthickness=0)
+    sb = tk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=sb.set)
+    sb.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+    inner = tk.Frame(canvas, bg=bg)
+    win = canvas.create_window((0, 0), window=inner, anchor="nw")
+    inner.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
+    _wheel = lambda e: canvas.yview_scroll(int(-e.delta / 120), "units")
+    canvas.bind("<MouseWheel>", _wheel)
+    inner.bind("<MouseWheel>", _wheel)
+    return inner
+
+
 def load_image(path, size):
     """Carga una imagen como CTkImage o ImageTk según la librería disponible."""
     if not os.path.exists(path):

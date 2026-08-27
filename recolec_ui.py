@@ -65,11 +65,9 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
             tk.Label(self, text="Nueva Recolección", font=(FONT_FAMILY, 16, "bold"), bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 15))
 
         # Contenedor del formulario
-        if ctk:
-            form_frame = ctk.CTkFrame(self, fg_color="transparent")
-        else:
-            form_frame = tk.Frame(self, bg=COLORS["surface_container"])
-        form_frame.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        # Contenedor del formulario con scroll (evita que se corten campos/botón)
+        form_frame = ui_utils.scrollable_form(
+            self, COLORS["surface_container"], fill="both", expand=True, padx=30, pady=(0, 20))
 
         # 1. Fecha del Registro
         self.create_label(form_frame, "Fecha del Registro")

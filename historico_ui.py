@@ -95,8 +95,14 @@ class HistoricoApp:
         for titulo, valor, icono in kpis:
             self._kpi_card(kpi_row, titulo, valor, icono)
 
-        # Panel de ranking (gamificación)
-        self._build_ranking(outer)
+        # Fila inferior: ranking (gamificación) + proyecciones lado a lado
+        bottom = tk.Frame(outer, bg=COLORS["background"])
+        bottom.pack(fill="both", expand=True)
+        bottom.grid_columnconfigure(0, weight=1)
+        bottom.grid_columnconfigure(1, weight=1)
+        bottom.grid_rowconfigure(0, weight=1)
+        self._build_ranking(bottom)
+        self._build_proyecciones(bottom)
 
     def _kpi_card(self, parent, titulo, valor, icono):
         if ctk:
@@ -121,10 +127,9 @@ class HistoricoApp:
         if ctk:
             panel = ctk.CTkFrame(parent, fg_color=COLORS["surface_container"],
                                  border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12)
-            panel.pack(fill="both", expand=True)
         else:
             panel = tk.Frame(parent, bg=COLORS["surface_container"], bd=1, relief="solid")
-            panel.pack(fill="both", expand=True)
+        panel.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
         if ctk:
             ctk.CTkLabel(panel, text="Ranking de participación", font=(FONT_FAMILY, 18, "bold"),
@@ -175,6 +180,106 @@ class HistoricoApp:
             puntos = int(round(pet_val * 100))  # gamificación: 100 pts por kg de PET
             tree.insert("", "end", values=(
                 puesto, nombre, f"{pet_val:g}", jornadas, botellas, puntos))
+
+    def _build_proyecciones(self, parent):
+        """Panel de predicciones: con un filamento producido, cuántas piezas de
+        cada modelo alcanzan a hacerse y cuánto sobra."""
+        if ctk:
+            panel = ctk.CTkFrame(parent, fg_color=COLORS["surface_container"],
+                                 border_color=COLORS["primary_fixed"], border_width=1, corner_radius=12)
+        else:
+            panel = tk.Frame(parent, bg=COLORS["surface_container"], bd=1, relief="solid")
+        panel.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        if ctk:
+            ctk.CTkLabel(panel, text="Proyecciones de producción", font=(FONT_FAMILY, 18, "bold"),
+                         text_color=COLORS["primary_fixed"]).pack(pady=(20, 6), padx=20, anchor="w")
+        else:
+            tk.Label(panel, text="Proyecciones de producción", font=(FONT_FAMILY, 16, "bold"),
+                     bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 6), padx=20, anchor="w")
+
+        # Catálogos para el cálculo
+        try:
+            self._proy_prod = repositorio.listar_producciones()          # (id, etiqueta, PesoObtenido_kg)
+            self._proy_modelos = repositorio.listar_modelos_admin()      # (id, nombre, cat, tiempo_h, peso_g)
+        except Exception:  # noqa: BLE001
+            self._proy_prod, self._proy_modelos = [], []
+
+        sel = tk.Frame(panel, bg=COLORS["surface_container"])
+        sel.pack(fill="x", padx=20, pady=(0, 4))
+        lbl = "Filamento producido:"
+        if ctk:
+            ctk.CTkLabel(sel, text=lbl, font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"]).pack(anchor="w")
+        else:
+            tk.Label(sel, text=lbl, font=(FONT_FAMILY, 10, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(anchor="w")
+
+        prod_values = ["Seleccione filamento..."] + [lab for _, lab, _ in self._proy_prod]
+        self._proy_peso_by_lbl = {lab: float(peso or 0) for _, lab, peso in self._proy_prod}
+        if ctk:
+            self._proy_combo = ctk.CTkOptionMenu(sel, values=prod_values, height=34, command=self._proy_calcular,
+                                                 fg_color=COLORS["surface_lowest"], button_color=COLORS["surface_lowest"],
+                                                 button_hover_color=COLORS["outline_variant"], dropdown_fg_color=COLORS["surface_container"],
+                                                 dropdown_hover_color=COLORS["outline_variant"], text_color=COLORS["on_surface"])
+            self._proy_combo.set(prod_values[0])
+            self._proy_combo.pack(fill="x", pady=(2, 6))
+            self._proy_var = None
+        else:
+            self._proy_var = tk.StringVar(value=prod_values[0])
+            self._proy_combo = tk.OptionMenu(sel, self._proy_var, *prod_values, command=self._proy_calcular)
+            self._proy_combo.config(bg=COLORS["surface_lowest"], fg=COLORS["on_surface"], highlightthickness=0, bd=0)
+            self._proy_combo.pack(fill="x", pady=(2, 6))
+
+        self._proy_msg = tk.Label(panel, text="Elige un filamento para ver cuántas piezas alcanzan.",
+                                  bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"],
+                                  font=(FONT_FAMILY, 10), wraplength=520, justify="left")
+        self._proy_msg.pack(anchor="w", padx=20, pady=(0, 8))
+
+        tf = tk.Frame(panel, bg=COLORS["surface_container"])
+        tf.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        sb = ttk.Scrollbar(tf); sb.pack(side="right", fill="y")
+        cols = ("modelo", "piezas", "porpieza", "sobrante", "tiempo")
+        self._proy_tree = ttk.Treeview(tf, columns=cols, show="headings", style="Hist.Treeview", yscrollcommand=sb.set)
+        self._proy_tree.heading("modelo", text="Modelo")
+        self._proy_tree.heading("piezas", text="Piezas posibles")
+        self._proy_tree.heading("porpieza", text="g/pieza")
+        self._proy_tree.heading("sobrante", text="Sobrante (g)")
+        self._proy_tree.heading("tiempo", text="Tiempo total (h)")
+        self._proy_tree.column("modelo", width=170, anchor="w", stretch=True)
+        self._proy_tree.column("piezas", width=120, anchor="center", stretch=True)
+        self._proy_tree.column("porpieza", width=90, anchor="center", stretch=True)
+        self._proy_tree.column("sobrante", width=110, anchor="center", stretch=True)
+        self._proy_tree.column("tiempo", width=120, anchor="center", stretch=True)
+        self._proy_tree.pack(fill="both", expand=True)
+        sb.config(command=self._proy_tree.yview)
+
+    def _proy_calcular(self, _choice=None):
+        for it in self._proy_tree.get_children():
+            self._proy_tree.delete(it)
+        etiqueta = self._proy_combo.get() if ctk else self._proy_var.get()
+        peso_kg = self._proy_peso_by_lbl.get(etiqueta)
+        if peso_kg is None:
+            self._proy_msg.configure(text="Elige un filamento para ver cuántas piezas alcanzan.")
+            return
+        disponible_g = peso_kg * 1000.0
+        mejor = None
+        for _id, nombre, _cat, tiempo_h, peso_g in self._proy_modelos:
+            if not peso_g or float(peso_g) <= 0:
+                self._proy_tree.insert("", "end", values=(nombre, "—", "—", "—", "—"))
+                continue
+            pg = float(peso_g)
+            piezas = int(disponible_g // pg)
+            sobrante = disponible_g - piezas * pg
+            tiempo_total = (float(tiempo_h) * piezas) if tiempo_h else 0
+            self._proy_tree.insert("", "end", values=(
+                nombre, piezas, f"{pg:g}", f"{sobrante:.0f}", f"{tiempo_total:g}" if tiempo_h else "—"))
+            if mejor is None or piezas > mejor[1]:
+                mejor = (nombre, piezas, sobrante)
+        if mejor and mejor[1] > 0:
+            self._proy_msg.configure(text=(
+                f"Con {peso_kg:g} kg ({disponible_g:.0f} g) de filamento alcanza para "
+                f"{mejor[1]} {mejor[0]}, sobrando ~{mejor[2]:.0f} g. Mira la tabla para cada modelo."))
+        else:
+            self._proy_msg.configure(text="No alcanza para ningún modelo con ese filamento (o faltan pesos estimados en los modelos).")
 
     # --- Acciones / navegación ---
     def generar_informe(self):
