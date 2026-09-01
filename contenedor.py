@@ -8,8 +8,8 @@ su interfaz pública (DIP), no de los módulos globales. `app.py` crea un
 Contenedor y reparte estas dependencias a cada página.
 """
 
-import repositorio
-from servicio_proyeccion import ServicioProyeccion
+import datos.repositorio as repositorio
+from servicios.servicio_proyeccion import ServicioProyeccion
 
 
 class Contenedor:

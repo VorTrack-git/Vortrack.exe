@@ -3,16 +3,16 @@
 import tkinter as tk
 from tkinter import messagebox
 
-import auth
-import inicio_ui
-import login_ui
-import recolec_ui
-import transformacion_ui
-import impresion_ui
-import historico_ui
-import admin_ui
+import servicios.auth as auth
+import interfaz.inicio_ui as inicio_ui
+import interfaz.login_ui as login_ui
+import interfaz.recolec_ui as recolec_ui
+import interfaz.transformacion_ui as transformacion_ui
+import interfaz.impresion_ui as impresion_ui
+import interfaz.historico_ui as historico_ui
+import interfaz.admin_ui as admin_ui
 from contenedor import Contenedor
-from widgets import FabricaWidgets
+from interfaz.widgets import FabricaWidgets
 
 try:
     import customtkinter as ctk
