@@ -117,7 +117,7 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
             self.modelos, self.producciones = [], []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar los catálogos:\n{exc}")
         self._modelo_by_name = {row[1]: row[0] for row in self.modelos}
-        # estimados por modelo: (tiempo_estimado_horas, peso_estimado_gramos)
+        # estimados por modelo: (tiempo_estimado_min, peso_estimado_gramos)
         self._modelo_estimados = {row[1]: (row[3], row[4]) for row in self.modelos}
         self._prod_by_label = {lab: idp for idp, lab, _ in self.producciones}
 

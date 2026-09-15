@@ -52,6 +52,13 @@ class RepositorioBase:
         return float(v) if v is not None else 0.0
 
 
+def es_error_duplicado(exc):
+    """True si la excepción de la base es una violación de clave única (nombre repetido)."""
+    texto = " ".join(str(a) for a in getattr(exc, "args", ())) or str(exc)
+    texto = texto.upper()
+    return "2627" in texto or "2601" in texto or "UNIQUE KEY" in texto or "UNIQUE CONSTRAINT" in texto
+
+
 def parse_fecha(valor):
     """Convierte la fecha del formulario (str dd/mm/aaaa o date) a datetime.date."""
     if isinstance(valor, (date, datetime)):

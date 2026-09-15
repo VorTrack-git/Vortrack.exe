@@ -3,7 +3,7 @@ repo_catalogos.py
 Repositorios de catálogos: Responsables, Lugares y Modelos.
 """
 
-from datos.repositorio_base import RepositorioBase
+from datos.repositorio_base import RepositorioBase, es_error_duplicado
 
 
 class RepoResponsables(RepositorioBase):
@@ -21,13 +21,23 @@ class RepoLugares(RepositorioBase):
         return self._query("SELECT IdLugar, NombreLugar, Descripcion FROM Lugares ORDER BY NombreLugar")
 
     def crear(self, nombre, descripcion):
-        return self._ejecutar(
-            "INSERT INTO Lugares (NombreLugar, Descripcion) OUTPUT INSERTED.IdLugar VALUES (?, ?)",
-            (nombre, descripcion or None), return_id=True)
+        try:
+            return self._ejecutar(
+                "INSERT INTO Lugares (NombreLugar, Descripcion) OUTPUT INSERTED.IdLugar VALUES (?, ?)",
+                (nombre, descripcion or None), return_id=True)
+        except Exception as exc:  # noqa: BLE001
+            if es_error_duplicado(exc):
+                raise ValueError(f"Ya existe un lugar llamado «{nombre}». Usa otro nombre.")
+            raise
 
     def actualizar(self, id_lugar, nombre, descripcion):
-        self._ejecutar("UPDATE Lugares SET NombreLugar=?, Descripcion=? WHERE IdLugar=?",
-                       (nombre, descripcion or None, id_lugar))
+        try:
+            self._ejecutar("UPDATE Lugares SET NombreLugar=?, Descripcion=? WHERE IdLugar=?",
+                           (nombre, descripcion or None, id_lugar))
+        except Exception as exc:  # noqa: BLE001
+            if es_error_duplicado(exc):
+                raise ValueError(f"Ya existe otro lugar llamado «{nombre}». Usa otro nombre.")
+            raise
 
     def eliminar(self, id_lugar):
         fila = self._query("SELECT COUNT(*) FROM JornadasRecoleccion WHERE IdLugar = ?",
@@ -48,15 +58,25 @@ class RepoModelos(RepositorioBase):
             "FROM Modelos ORDER BY Nombre")
 
     def crear(self, nombre, categoria, tiempo_estimado, peso_estimado):
-        return self._ejecutar(
-            "INSERT INTO Modelos (Nombre, Categoria, TiempoEstimado, PesoEstimado) "
-            "OUTPUT INSERTED.IdModelo VALUES (?, ?, ?, ?)",
-            (nombre, categoria or None, tiempo_estimado, peso_estimado), return_id=True)
+        try:
+            return self._ejecutar(
+                "INSERT INTO Modelos (Nombre, Categoria, TiempoEstimado, PesoEstimado) "
+                "OUTPUT INSERTED.IdModelo VALUES (?, ?, ?, ?)",
+                (nombre, categoria or None, tiempo_estimado, peso_estimado), return_id=True)
+        except Exception as exc:  # noqa: BLE001
+            if es_error_duplicado(exc):
+                raise ValueError(f"Ya existe un modelo llamado «{nombre}». Usa otro nombre.")
+            raise
 
     def actualizar(self, id_modelo, nombre, categoria, tiempo_estimado, peso_estimado):
-        self._ejecutar(
-            "UPDATE Modelos SET Nombre=?, Categoria=?, TiempoEstimado=?, PesoEstimado=? WHERE IdModelo=?",
-            (nombre, categoria or None, tiempo_estimado, peso_estimado, id_modelo))
+        try:
+            self._ejecutar(
+                "UPDATE Modelos SET Nombre=?, Categoria=?, TiempoEstimado=?, PesoEstimado=? WHERE IdModelo=?",
+                (nombre, categoria or None, tiempo_estimado, peso_estimado, id_modelo))
+        except Exception as exc:  # noqa: BLE001
+            if es_error_duplicado(exc):
+                raise ValueError(f"Ya existe otro modelo llamado «{nombre}». Usa otro nombre.")
+            raise
 
     def eliminar(self, id_modelo):
         fila = self._query("SELECT COUNT(*) FROM FabricacionObjetos WHERE IdModelo = ?",

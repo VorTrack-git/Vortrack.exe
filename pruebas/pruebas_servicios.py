@@ -23,10 +23,10 @@ def main():
     p = ServicioProyeccion()
 
     # --- Proyección de impresión: (peso_total_g, tiempo_total_min) ---
-    ok &= _check("proyeccion_impresion(2, 80, 3) == (240.0, 360)",
-                 p.proyeccion_impresion(2, 80, 3) == (240.0, 360))
+    ok &= _check("proyeccion_impresion(58, 80, 3) == (240.0, 174)  [tiempo en minutos]",
+                 p.proyeccion_impresion(58, 80, 3) == (240.0, 174))
     ok &= _check("proyeccion_impresion con cantidad vacía usa 1",
-                 p.proyeccion_impresion(1, 50, "") == (50.0, 60))
+                 p.proyeccion_impresion(30, 50, "") == (50.0, 30))
     ok &= _check("proyeccion_impresion sin estimados -> (None, None)",
                  p.proyeccion_impresion(None, None, 5) == (None, None))
 

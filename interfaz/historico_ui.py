@@ -217,7 +217,7 @@ class HistoricoApp:
             ("piezas", "Piezas posibles", 120, "center"),
             ("porpieza", "g/pieza", 90, "center"),
             ("sobrante", "Sobrante (g)", 110, "center"),
-            ("tiempo", "Tiempo total (h)", 120, "center"),
+            ("tiempo", "Tiempo total (min)", 120, "center"),
         ]
         self._proy_tree = self.fw.tabla(tf, columnas, "Hist.Treeview", yscrollcommand=sb.set)
         self._proy_tree.pack(fill="both", expand=True)

@@ -442,6 +442,8 @@ class AdminApp:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
         try:
             self.datos.crear_lugar(nombre, self.l_desc.get().strip())
+        except ValueError as exc:
+            messagebox.showwarning("No se pudo guardar", str(exc)); return
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al guardar", str(exc)); return
         messagebox.showinfo("Lugar", "Lugar creado.")
@@ -455,6 +457,8 @@ class AdminApp:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
         try:
             self.datos.actualizar_lugar(self._lug_selected, nombre, self.l_desc.get().strip())
+        except ValueError as exc:
+            messagebox.showwarning("No se pudo actualizar", str(exc)); return
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
         messagebox.showinfo("Lugar", "Lugar actualizado.")
@@ -494,7 +498,7 @@ class AdminApp:
                  bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(anchor="w", pady=(0, 4))
         self.m_nombre = self._field(fi, "Nombre del modelo")
         self.m_categoria = self._field(fi, "Categoría")
-        self.m_tiempo = self._field(fi, "Tiempo estimado (h)")
+        self.m_tiempo = self._field(fi, "Tiempo estimado (min)")
         self.m_peso = self._field(fi, "Peso estimado (g)")
         row1 = tk.Frame(fi, bg=COLORS["surface_container"]); row1.pack(fill="x")
         self._button(row1, "Guardar nuevo", self._mod_guardar, COLORS["success"])
@@ -505,7 +509,7 @@ class AdminApp:
         tablecard = self._card(wrap); tablecard.grid(row=0, column=1, sticky="nsew")
         self._title(tablecard, "Modelos de material didáctico")
         cols = ("num", "nombre", "categoria", "tiempo", "peso")
-        heads = ("#", "Nombre", "Categoría", "Tiempo (h)", "Peso (g)")
+        heads = ("#", "Nombre", "Categoría", "Tiempo (min)", "Peso (g)")
         widths = [(50, True), (190, False), (150, False), (110, True), (100, True)]
         self.mod_tree = self._tree(tablecard, cols, heads, widths, "AdmMod.Treeview")
         self.mod_tree.bind("<<TreeviewSelect>>", self._mod_on_select)
@@ -525,7 +529,7 @@ class AdminApp:
         for n, (idm, nombre, cat, tiempo, peso) in enumerate(filas, start=1):
             self.mod_tree.insert("", "end", iid=str(idm), values=(
                 n, nombre or "", cat or "",
-                tiempo if tiempo is not None else "",
+                f"{float(tiempo):g}" if tiempo is not None else "",
                 f"{float(peso):g}" if peso is not None else ""))
 
     def _mod_on_select(self, _e=None):
@@ -546,8 +550,8 @@ class AdminApp:
         if t:
             ok, val = validaciones.numero(t)
             if not ok:
-                messagebox.showwarning("Error", "El tiempo debe ser un número."); return None
-            tiempo = int(val)
+                messagebox.showwarning("Error", "El tiempo debe ser un número en minutos (ej. 58)."); return None
+            tiempo = val
         peso = None
         p = self.m_peso.get().strip()
         if p:
@@ -562,6 +566,8 @@ class AdminApp:
             return
         try:
             self.datos.crear_modelo(*datos)
+        except ValueError as exc:
+            messagebox.showwarning("No se pudo guardar", str(exc)); return
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al guardar", str(exc)); return
         messagebox.showinfo("Modelo", "Modelo creado.")
@@ -575,6 +581,8 @@ class AdminApp:
             return
         try:
             self.datos.actualizar_modelo(self._mod_selected, *datos)
+        except ValueError as exc:
+            messagebox.showwarning("No se pudo actualizar", str(exc)); return
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Error al actualizar", str(exc)); return
         messagebox.showinfo("Modelo", "Modelo actualizado.")
