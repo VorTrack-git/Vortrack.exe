@@ -6,7 +6,9 @@ import servicios.auth as auth
 import interfaz.ui_utils as ui_utils
 import datos.repositorio as repositorio
 from interfaz.ui_tema import COLORS, FONT_FAMILY
+from interfaz.ui_cargando import cargar_con_spinner, ejecutar_con_spinner
 from interfaz.widgets import FabricaWidgets
+from servicios.servicio_informe import ServicioInforme
 from servicios.servicio_proyeccion import ServicioProyeccion
 
 try:
@@ -18,12 +20,15 @@ except ImportError:
 class HistoricoApp:
     PAGE = "historico"
 
-    def __init__(self, root, on_navigate=None, on_logout=None, datos=None, proyeccion=None, fabrica=None):
+    def __init__(self, root, on_navigate=None, on_logout=None, datos=None, proyeccion=None, fabrica=None,
+                 informe=None):
         self.root = root
         self.on_navigate = on_navigate
         self.on_logout = on_logout
         self.datos = datos or repositorio
         self.proyeccion = proyeccion or ServicioProyeccion()
+        self.informe = informe or ServicioInforme(self.datos)
+        self._generando = False
         self.fw = fabrica or FabricaWidgets()
         self.root.title("VorTrack - Histórico e Informes")
         self.root.minsize(1024, 700)
@@ -73,37 +78,64 @@ class HistoricoApp:
                       font=(FONT_FAMILY, 11, "bold"), bd=0, padx=20, pady=8, cursor="hand2",
                       command=self.generar_informe).pack(side="right")
 
-        # Indicadores calculados en vivo desde la base de datos
-        try:
-            k = self.datos.indicadores_resumen()
-        except Exception as exc:  # noqa: BLE001
-            k = {"pet_recolectado": 0, "filamento_producido": 0, "desperdicio": 0,
-                 "objetos_impresos": 0, "responsables": 0, "botellas": 0}
-            messagebox.showwarning("Base de datos", f"No se pudieron cargar los indicadores:\n{exc}")
+        # Cuerpo con los datos: el spinner lo tapa mientras llegan las consultas.
+        cuerpo = self._cuerpo = tk.Frame(outer, bg=COLORS["background"])
+        cuerpo.pack(fill="both", expand=True)
 
-        kpis = [
-            ("PET recolectado", f"{k['pet_recolectado']:g} kg", "🧴"),
-            ("Filamento producido", f"{k['filamento_producido']:g} kg", "🧵"),
-            ("Desperdicio", f"{k['desperdicio']:.2f} kg", "♻"),
-            ("Objetos impresos", str(k['objetos_impresos']), "🖨"),
-            ("Responsables", str(k['responsables']), "👥"),
-            ("Botellas recolectadas", str(k['botellas']), "🍾"),
-        ]
-
-        # Fila de indicadores (KPIs)
-        kpi_row = tk.Frame(outer, bg=COLORS["background"])
+        # Fila de indicadores (KPIs); los valores se rellenan en _poblar_indicadores.
+        kpi_row = tk.Frame(cuerpo, bg=COLORS["background"])
         kpi_row.pack(fill="x", pady=(0, 20))
-        for titulo, valor, icono in kpis:
-            self._kpi_card(kpi_row, titulo, valor, icono)
+        self._kpi_valores = {}
+        for clave, titulo, icono in [
+            ("pet_recolectado", "PET recolectado", "🧴"),
+            ("filamento_producido", "Filamento producido", "🧵"),
+            ("desperdicio", "Desperdicio", "♻"),
+            ("objetos_impresos", "Objetos impresos", "🖨"),
+            ("responsables", "Responsables", "👥"),
+            ("botellas", "Botellas recolectadas", "🍾"),
+        ]:
+            self._kpi_valores[clave] = self._kpi_card(kpi_row, titulo, "—", icono)
 
         # Fila inferior: ranking (gamificación) + proyecciones lado a lado
-        bottom = tk.Frame(outer, bg=COLORS["background"])
+        bottom = tk.Frame(cuerpo, bg=COLORS["background"])
         bottom.pack(fill="both", expand=True)
         bottom.grid_columnconfigure(0, weight=1)
         bottom.grid_columnconfigure(1, weight=1)
         bottom.grid_rowconfigure(0, weight=1)
         self._build_ranking(bottom)
         self._build_proyecciones(bottom)
+
+        # Consultas en paralelo con spinner encima del cuerpo; al terminar se rellenan los paneles.
+        cargar_con_spinner(cuerpo, {
+            "indicadores": (self.datos.indicadores_resumen, "Calculando indicadores…"),
+            "ranking": (self.datos.ranking_participacion, "Consultando ranking de participación…"),
+            "producciones": (self.datos.listar_producciones, "Obteniendo filamentos producidos…"),
+            "modelos": (self.datos.listar_modelos_admin, "Cargando modelos…"),
+        }, self._poblar)
+
+    def _poblar(self, cargas):
+        self._cargas = cargas
+        self._poblar_indicadores()
+        self._poblar_ranking()
+        self._poblar_proyecciones()
+
+    def _poblar_indicadores(self):
+        try:
+            k = self._cargas["indicadores"].result()
+        except Exception as exc:  # noqa: BLE001
+            k = {"pet_recolectado": 0, "filamento_producido": 0, "desperdicio": 0,
+                 "objetos_impresos": 0, "responsables": 0, "botellas": 0}
+            messagebox.showwarning("Base de datos", f"No se pudieron cargar los indicadores:\n{exc}")
+        textos = {
+            "pet_recolectado": f"{k['pet_recolectado']:g} kg",
+            "filamento_producido": f"{k['filamento_producido']:g} kg",
+            "desperdicio": f"{k['desperdicio']:.2f} kg",
+            "objetos_impresos": str(k['objetos_impresos']),
+            "responsables": str(k['responsables']),
+            "botellas": str(k['botellas']),
+        }
+        for clave, texto in textos.items():
+            self._kpi_valores[clave].configure(text=texto)
 
     def _kpi_card(self, parent, titulo, valor, icono):
         if ctk:
@@ -119,10 +151,12 @@ class HistoricoApp:
 
         tk.Label(inner, text=icono, bg=COLORS["surface_container"], fg=COLORS["primary_fixed"],
                  font=(FONT_FAMILY, 18)).pack(anchor="w")
-        tk.Label(inner, text=valor, bg=COLORS["surface_container"], fg=COLORS["white"],
-                 font=(FONT_FAMILY, 24, "bold")).pack(anchor="w", pady=(4, 0))
+        lbl_valor = tk.Label(inner, text=valor, bg=COLORS["surface_container"], fg=COLORS["white"],
+                             font=(FONT_FAMILY, 24, "bold"))
+        lbl_valor.pack(anchor="w", pady=(4, 0))
         tk.Label(inner, text=titulo, bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"],
                  font=(FONT_FAMILY, 10)).pack(anchor="w")
+        return lbl_valor
 
     def _build_ranking(self, parent):
         if ctk:
@@ -153,18 +187,19 @@ class HistoricoApp:
             ("botellas", "Botellas", 110, "center"),
             ("puntos", "Puntos", 110, "center"),
         ]
-        tree = self.fw.tabla(tree_frame, columnas, "Hist.Treeview", yscrollcommand=scroll.set)
-        tree.pack(fill="both", expand=True)
-        scroll.config(command=tree.yview)
+        self._ranking_tree = self.fw.tabla(tree_frame, columnas, "Hist.Treeview", yscrollcommand=scroll.set)
+        self._ranking_tree.pack(fill="both", expand=True)
+        scroll.config(command=self._ranking_tree.yview)
 
+    def _poblar_ranking(self):
         try:
-            filas = self.datos.ranking_participacion()
+            filas = self._cargas["ranking"].result()
         except Exception:  # noqa: BLE001
             filas = []
         for puesto, (nombre, pet, jornadas, botellas) in enumerate(filas, start=1):
             pet_val = float(pet) if pet is not None else 0.0
             puntos = int(round(pet_val * 100))  # gamificación: 100 pts por kg de PET
-            tree.insert("", "end", values=(
+            self._ranking_tree.insert("", "end", values=(
                 puesto, nombre, f"{pet_val:g}", jornadas, botellas, puntos))
 
     def _build_proyecciones(self, parent):
@@ -184,25 +219,14 @@ class HistoricoApp:
             tk.Label(panel, text="Proyecciones de producción", font=(FONT_FAMILY, 16, "bold"),
                      bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(pady=(20, 6), padx=20, anchor="w")
 
-        # Catálogos para el cálculo
-        try:
-            self._proy_prod = self.datos.listar_producciones()          # (id, etiqueta, PesoObtenido_kg)
-            self._proy_modelos = self.datos.listar_modelos_admin()      # (id, nombre, cat, tiempo_h, peso_g)
-        except Exception:  # noqa: BLE001
-            self._proy_prod, self._proy_modelos = [], []
-
-        sel = tk.Frame(panel, bg=COLORS["surface_container"])
-        sel.pack(fill="x", padx=20, pady=(0, 4))
+        # El desplegable se crea en _poblar_proyecciones, cuando llegan los catálogos.
+        self._proy_sel = tk.Frame(panel, bg=COLORS["surface_container"])
+        self._proy_sel.pack(fill="x", padx=20, pady=(0, 4))
         lbl = "Filamento producido:"
         if ctk:
-            ctk.CTkLabel(sel, text=lbl, font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"]).pack(anchor="w")
+            ctk.CTkLabel(self._proy_sel, text=lbl, font=(FONT_FAMILY, 12, "bold"), text_color=COLORS["on_surface_variant"]).pack(anchor="w")
         else:
-            tk.Label(sel, text=lbl, font=(FONT_FAMILY, 10, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(anchor="w")
-
-        prod_values = ["Seleccione filamento..."] + [lab for _, lab, _ in self._proy_prod]
-        self._proy_peso_by_lbl = {lab: float(peso or 0) for _, lab, peso in self._proy_prod}
-        self._proy_combo, self._proy_var = self.fw.combo(
-            sel, prod_values, command=self._proy_calcular, pady_ctk=(2, 6), pady_tk=(2, 6))
+            tk.Label(self._proy_sel, text=lbl, font=(FONT_FAMILY, 10, "bold"), bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"]).pack(anchor="w")
 
         self._proy_msg = tk.Label(panel, text="Elige un filamento para ver cuántas piezas alcanzan.",
                                   bg=COLORS["surface_container"], fg=COLORS["on_surface_variant"],
@@ -222,6 +246,19 @@ class HistoricoApp:
         self._proy_tree = self.fw.tabla(tf, columnas, "Hist.Treeview", yscrollcommand=sb.set)
         self._proy_tree.pack(fill="both", expand=True)
         sb.config(command=self._proy_tree.yview)
+
+    def _poblar_proyecciones(self):
+        # Catálogos para el cálculo
+        try:
+            self._proy_prod = self._cargas["producciones"].result()     # (id, etiqueta, PesoObtenido_kg)
+            self._proy_modelos = self._cargas["modelos"].result()       # (id, nombre, cat, tiempo_h, peso_g)
+        except Exception:  # noqa: BLE001
+            self._proy_prod, self._proy_modelos = [], []
+
+        prod_values = ["Seleccione filamento..."] + [lab for _, lab, _ in self._proy_prod]
+        self._proy_peso_by_lbl = {lab: float(peso or 0) for _, lab, peso in self._proy_prod}
+        self._proy_combo, self._proy_var = self.fw.combo(
+            self._proy_sel, prod_values, command=self._proy_calcular, pady_ctk=(2, 6), pady_tk=(2, 6))
 
     def _proy_calcular(self, _choice=None):
         for it in self._proy_tree.get_children():
@@ -249,8 +286,30 @@ class HistoricoApp:
 
     # --- Acciones / navegación ---
     def generar_informe(self):
-        messagebox.showinfo("Generar informe",
-                            "La generación de informes en PDF estará disponible próximamente.")
+        """Genera el informe PDF en un hilo (spinner por etapas) y lo guarda en Descargas."""
+        if self._generando:
+            return
+        self._generando = True
+        usuario = auth.get_current_user()
+        ejecutar_con_spinner(
+            self._cuerpo,
+            lambda reportar: self.informe.generar(usuario=usuario, progreso=reportar),
+            self._informe_listo, titulo="Generando informe…")
+
+    def _informe_listo(self, futuro):
+        self._generando = False
+        try:
+            ruta = futuro.result()
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Generar informe", f"No se pudo generar el informe PDF:\n\n{exc}")
+            return
+        if messagebox.askyesno("Informe descargado",
+                               f"El informe se guardó en tu carpeta de Descargas:\n\n{ruta.name}\n\n"
+                               "¿Deseas abrirlo ahora?"):
+            try:
+                os.startfile(ruta)  # abre con el visor de PDF predeterminado (Windows)
+            except (AttributeError, OSError) as exc:
+                messagebox.showwarning("Abrir informe", f"No se pudo abrir el archivo:\n{exc}\n\nRuta: {ruta}")
 
     def ir_a_inicio(self):
         if self.on_navigate:
@@ -261,8 +320,6 @@ class HistoricoApp:
         return
 
     def on_registrar_select(self, choice):
-        if hasattr(self, "registrar_btn") and ctk:
-            self.registrar_btn.set("REGISTRAR ▾")
         destinos = {"Recolección": "recoleccion", "Transformación": "transformacion", "Impresión": "impresion"}
         target = destinos.get(choice)
         if target and self.on_navigate:

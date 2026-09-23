@@ -9,6 +9,7 @@ import interfaz.ui_utils as ui_utils
 import datos.repositorio as repositorio
 import servicios.validaciones as validaciones
 from interfaz.ui_tema import COLORS, FONT_FAMILY
+from interfaz.ui_cargando import cargar_con_spinner, resultado
 from interfaz.widgets import FabricaWidgets
 
 try:
@@ -25,8 +26,9 @@ except ImportError:
 class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
     """Formulario para registrar la producción de filamento 3D a partir de PET (extrusión)."""
 
-    def __init__(self, parent, on_register_callback=None, datos=None, fabrica=None, **kwargs):
+    def __init__(self, parent, on_register_callback=None, datos=None, fabrica=None, precarga=None, **kwargs):
         self.on_register_callback = on_register_callback
+        self._precarga = precarga  # {clave: Future} con los catálogos ya consultados en paralelo
         self.datos = datos or repositorio
         self.fw = fabrica or FabricaWidgets()
         if ctk:
@@ -111,7 +113,7 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
 
         # 2. Jornada de recolección (origen del PET; su PesoPET es el peso ingresado)
         try:
-            self.jornadas = self.datos.listar_jornadas()
+            self.jornadas = resultado(self._precarga, "jornadas", self.datos.listar_jornadas)
         except Exception as exc:  # noqa: BLE001
             self.jornadas = []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar las jornadas:\n{exc}")
@@ -256,7 +258,8 @@ class TransformacionForm(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
-    def __init__(self, parent, datos=None, fabrica=None, **kwargs):
+    def __init__(self, parent, datos=None, fabrica=None, precarga=None, **kwargs):
+        self._precarga = precarga
         self.datos = datos or repositorio
         self.fw = fabrica or FabricaWidgets()
         if ctk:
@@ -290,14 +293,14 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        self.recargar()
+        self.recargar(self._precarga)
 
-    def recargar(self):
-        """Recarga el historial desde la base de datos."""
+    def recargar(self, precarga=None):
+        """Recarga el historial desde la base de datos (o desde la precarga inicial)."""
         for item in self.tree.get_children():
             self.tree.delete(item)
         try:
-            filas = self.datos.producciones_recientes()
+            filas = resultado(precarga, "recientes", self.datos.producciones_recientes)
         except Exception:  # noqa: BLE001
             return
         for fecha, id_jornada, color, diametro, peso_pet, peso_obt, metros, obs in filas:
@@ -313,6 +316,8 @@ class RecentTransformacionesFrame(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class TransformacionApp:
+    PAGE = "transformacion"
+
     def __init__(self, root, on_navigate=None, on_logout=None, datos=None, fabrica=None):
         self.root = root
         self.on_navigate = on_navigate
@@ -356,11 +361,19 @@ class TransformacionApp:
         self.canvas_frame.grid_columnconfigure(0, weight=0, minsize=440)
         self.canvas_frame.grid_columnconfigure(1, weight=1)
 
+        # Consultas en paralelo con spinner; los paneles se arman cuando llegan los datos.
+        cargar_con_spinner(self.canvas_frame, {
+            "jornadas": (self.datos.listar_jornadas, "Cargando jornadas de recolección…"),
+            "recientes": (self.datos.producciones_recientes, "Obteniendo historial de filamento…"),
+        }, self._construir_paneles)
+
+    def _construir_paneles(self, cargas):
         self.form = TransformacionForm(self.canvas_frame, on_register_callback=self.on_new_record,
-                                       datos=self.datos, fabrica=self.fw)
+                                       datos=self.datos, fabrica=self.fw, precarga=cargas)
         self.form.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
 
-        self.recent_records = RecentTransformacionesFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw)
+        self.recent_records = RecentTransformacionesFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw,
+                                                          precarga=cargas)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
     def on_new_record(self):
@@ -371,10 +384,6 @@ class TransformacionApp:
             self.on_navigate("inicio")
 
     def on_registrar_select(self, choice):
-        # Restaura la etiqueta del menú (solo en la versión ctk).
-        if hasattr(self, "registrar_btn") and ctk:
-            self.registrar_btn.set("REGISTRAR ▾")
-
         if choice == "Transformación":
             # Ya estamos en la página de transformación.
             return

@@ -5,6 +5,7 @@ from tkinter import messagebox
 
 import servicios.auth as auth
 import interfaz.ui_utils as ui_utils
+from interfaz.ui_navbar import build_registrar_menu
 # pyrefly: ignore [missing-import]
 from PIL import Image, ImageTk
 
@@ -144,44 +145,7 @@ class VorTrackApp:
         underline.pack(side="bottom", fill="x", pady=(3, 0))
 
         # Item 2: Registrar Dropdown Button
-        if ctk:
-            self.registrar_btn = ctk.CTkOptionMenu(
-                nav_items_frame,
-                values=["REGISTRAR ▾", "Recolección", "Transformación", "Impresión"],
-                fg_color=COLORS["surface_container"],
-                button_color=COLORS["surface_high"],
-                button_hover_color=COLORS["surface_bright"],
-                text_color=COLORS["on_surface_variant"],
-                dropdown_fg_color=COLORS["surface_container"],
-                dropdown_hover_color=COLORS["surface_bright"],
-                dropdown_text_color=COLORS["on_surface"],
-                font=(FONT_FAMILY, 11, "bold"),
-                dynamic_resizing=False,
-                width=130,
-                height=32,
-                corner_radius=12,
-                command=self.on_registrar_select
-            )
-            self.registrar_btn.set("REGISTRAR ▾")
-            self.registrar_btn.pack(side="left", padx=10)
-        else:
-            registrar_btn = tk.Menubutton(
-                nav_items_frame,
-                text="REGISTRAR ▾",
-                fg=COLORS["on_surface_variant"],
-                bg=COLORS["surface_container"],
-                activebackground=COLORS["surface_bright"],
-                activeforeground=COLORS["primary_fixed"],
-                font=(FONT_FAMILY, 10, "bold"),
-                bd=0,
-                cursor="hand2"
-            )
-            registrar_menu = tk.Menu(registrar_btn, tearoff=0, bg=COLORS["surface_container"], fg=COLORS["on_surface"])
-            registrar_menu.add_command(label="Recolección", command=lambda: self.on_registrar_select("Recolección"))
-            registrar_menu.add_command(label="Transformación", command=lambda: self.on_registrar_select("Transformación"))
-            registrar_menu.add_command(label="Impresión", command=lambda: self.on_registrar_select("Impresión"))
-            registrar_btn.config(menu=registrar_menu)
-            registrar_btn.pack(side="left", padx=16)
+        self.registrar_menu = build_registrar_menu(nav_items_frame, self)
 
         # Item 3: Histórico Informes
         if ctk:
@@ -563,10 +527,6 @@ class VorTrackApp:
     # ACTIONS
     # ---------------------------------------------------------
     def on_registrar_select(self, choice):
-        # Restaura la etiqueta del menú (solo en la versión ctk).
-        if hasattr(self, "registrar_btn") and ctk:
-            self.registrar_btn.set("REGISTRAR ▾")
-
         destinos = {"Recolección": "recoleccion", "Transformación": "transformacion", "Impresión": "impresion"}
         if choice in destinos:
             if self.on_navigate:

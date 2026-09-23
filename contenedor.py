@@ -9,14 +9,17 @@ Contenedor y reparte estas dependencias a cada página.
 """
 
 import datos.repositorio as repositorio
+from servicios.servicio_informe import ServicioInforme
 from servicios.servicio_proyeccion import ServicioProyeccion
 
 
 class Contenedor:
     """Agrupa las dependencias de la aplicación (datos + servicios)."""
 
-    def __init__(self, datos=None, proyeccion=None):
+    def __init__(self, datos=None, proyeccion=None, informe=None):
         # `datos`: fachada de repositorios (misma interfaz pública que repositorio).
         self.datos = datos or repositorio
         # `proyeccion`: servicio de proyecciones/predicciones de producción.
         self.proyeccion = proyeccion or ServicioProyeccion()
+        # `informe`: genera el informe PDF del Histórico (datos -> HTML -> PDF en Descargas).
+        self.informe = informe or ServicioInforme(self.datos)

@@ -4,6 +4,9 @@ Aplicación de escritorio (Python + Tkinter / customtkinter) para el seguimiento
 del reciclaje de PET → producción de filamento 3D → impresión de material
 didáctico, respaldada por Microsoft SQL Server.
 
+`customtkinter` es opcional: si no está instalado, la app cae automáticamente
+a Tkinter puro (ver el `try/except` de importación en [`app.py`](app.py)).
+
 ## Cómo ejecutar
 
 Desde la raíz del proyecto:

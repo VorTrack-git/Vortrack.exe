@@ -9,6 +9,7 @@ import interfaz.ui_utils as ui_utils
 import datos.repositorio as repositorio
 import servicios.validaciones as validaciones
 from interfaz.ui_tema import COLORS, FONT_FAMILY
+from interfaz.ui_cargando import cargar_con_spinner, resultado
 from interfaz.widgets import FabricaWidgets
 from servicios.servicio_proyeccion import ServicioProyeccion
 
@@ -29,8 +30,10 @@ ESTADOS = ["Seleccione estado...", "En proceso", "Finalizado", "Fallido"]
 class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
     """Formulario para registrar impresiones 3D de material didáctico."""
 
-    def __init__(self, parent, on_register_callback=None, datos=None, proyeccion=None, fabrica=None, **kwargs):
+    def __init__(self, parent, on_register_callback=None, datos=None, proyeccion=None, fabrica=None,
+                 precarga=None, **kwargs):
         self.on_register_callback = on_register_callback
+        self._precarga = precarga  # {clave: Future} con los catálogos ya consultados en paralelo
         self.datos = datos or repositorio
         self.proyeccion = proyeccion or ServicioProyeccion()
         self.fw = fabrica or FabricaWidgets()
@@ -111,8 +114,8 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
 
         # Catálogos desde la base de datos (FK obligatorias)
         try:
-            self.modelos = self.datos.listar_modelos_admin()   # (id, nombre, cat, tiempo_h, peso_g)
-            self.producciones = self.datos.listar_producciones()
+            self.modelos = resultado(self._precarga, "modelos", self.datos.listar_modelos_admin)  # (id, nombre, cat, tiempo_h, peso_g)
+            self.producciones = resultado(self._precarga, "producciones", self.datos.listar_producciones)
         except Exception as exc:  # noqa: BLE001
             self.modelos, self.producciones = [], []
             messagebox.showwarning("Base de datos", f"No se pudieron cargar los catálogos:\n{exc}")
@@ -231,7 +234,8 @@ class ImpresionForm(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecentImpresionesFrame(ctk.CTkFrame if ctk else tk.Frame):
-    def __init__(self, parent, datos=None, fabrica=None, **kwargs):
+    def __init__(self, parent, datos=None, fabrica=None, precarga=None, **kwargs):
+        self._precarga = precarga
         self.datos = datos or repositorio
         self.fw = fabrica or FabricaWidgets()
         if ctk:
@@ -262,14 +266,14 @@ class RecentImpresionesFrame(ctk.CTkFrame if ctk else tk.Frame):
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        self.recargar()
+        self.recargar(self._precarga)
 
-    def recargar(self):
-        """Recarga el historial desde la base de datos."""
+    def recargar(self, precarga=None):
+        """Recarga el historial desde la base de datos (o desde la precarga inicial)."""
         for item in self.tree.get_children():
             self.tree.delete(item)
         try:
-            filas = self.datos.fabricaciones_recientes()
+            filas = resultado(precarga, "recientes", self.datos.fabricaciones_recientes)
         except Exception:  # noqa: BLE001
             return
         for fecha, modelo, cantidad, peso, tiempo, estado, id_prod in filas:
@@ -325,11 +329,21 @@ class ImpresionApp:
         self.canvas_frame.grid_columnconfigure(0, weight=0, minsize=440)
         self.canvas_frame.grid_columnconfigure(1, weight=1)
 
+        # Consultas en paralelo con spinner; los paneles se arman cuando llegan los datos.
+        cargar_con_spinner(self.canvas_frame, {
+            "modelos": (self.datos.listar_modelos_admin, "Cargando modelos…"),
+            "producciones": (self.datos.listar_producciones, "Obteniendo filamentos producidos…"),
+            "recientes": (self.datos.fabricaciones_recientes, "Obteniendo historial de impresiones…"),
+        }, self._construir_paneles)
+
+    def _construir_paneles(self, cargas):
         self.form = ImpresionForm(self.canvas_frame, on_register_callback=self.on_new_record,
-                                  datos=self.datos, proyeccion=self.proyeccion, fabrica=self.fw)
+                                  datos=self.datos, proyeccion=self.proyeccion, fabrica=self.fw,
+                                  precarga=cargas)
         self.form.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
 
-        self.recent_records = RecentImpresionesFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw)
+        self.recent_records = RecentImpresionesFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw,
+                                                     precarga=cargas)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
     def on_new_record(self):
@@ -345,8 +359,6 @@ class ImpresionApp:
             self.on_navigate("historico")
 
     def on_registrar_select(self, choice):
-        if hasattr(self, "registrar_btn") and ctk:
-            self.registrar_btn.set("REGISTRAR ▾")
         destinos = {"Recolección": "recoleccion", "Transformación": "transformacion", "Impresión": "impresion"}
         target = destinos.get(choice)
         if target and target != self.PAGE and self.on_navigate:

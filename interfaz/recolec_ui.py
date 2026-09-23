@@ -9,6 +9,7 @@ import interfaz.ui_utils as ui_utils
 import datos.repositorio as repositorio
 import servicios.validaciones as validaciones
 from interfaz.ui_tema import COLORS, FONT_FAMILY
+from interfaz.ui_cargando import cargar_con_spinner, resultado
 from interfaz.widgets import FabricaWidgets
 
 try:
@@ -23,8 +24,9 @@ except ImportError:
 
 
 class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
-    def __init__(self, parent, on_register_callback=None, datos=None, fabrica=None, **kwargs):
+    def __init__(self, parent, on_register_callback=None, datos=None, fabrica=None, precarga=None, **kwargs):
         self.on_register_callback = on_register_callback
+        self._precarga = precarga  # {clave: Future} con los catálogos ya consultados en paralelo
         self.datos = datos or repositorio
         self.fw = fabrica or FabricaWidgets()
         if ctk:
@@ -104,8 +106,8 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
 
         # Catálogos desde la base de datos (FK obligatorias)
         try:
-            self.responsables = self.datos.listar_responsables()
-            self.lugares = self.datos.listar_lugares()
+            self.responsables = resultado(self._precarga, "responsables", self.datos.listar_responsables)
+            self.lugares = resultado(self._precarga, "lugares", self.datos.listar_lugares)
         except Exception as exc:  # noqa: BLE001
             self.responsables, self.lugares = [], []
             messagebox.showwarning(
@@ -197,7 +199,8 @@ class RecoleccionesForm(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
-    def __init__(self, parent, datos=None, fabrica=None, **kwargs):
+    def __init__(self, parent, datos=None, fabrica=None, precarga=None, **kwargs):
+        self._precarga = precarga
         self.datos = datos or repositorio
         self.fw = fabrica or FabricaWidgets()
         if ctk:
@@ -228,14 +231,14 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
         self.tree.pack(fill="both", expand=True)
         tree_scroll.config(command=self.tree.yview)
 
-        self.recargar()
+        self.recargar(self._precarga)
 
-    def recargar(self):
-        """Recarga la tabla desde la base de datos."""
+    def recargar(self, precarga=None):
+        """Recarga la tabla desde la base de datos (o desde la precarga inicial)."""
         for item in self.tree.get_children():
             self.tree.delete(item)
         try:
-            filas = self.datos.recolecciones_recientes()
+            filas = resultado(precarga, "recientes", self.datos.recolecciones_recientes)
         except Exception:  # noqa: BLE001
             return
         for fecha, resp, lugar, botellas, peso, obs in filas:
@@ -246,6 +249,8 @@ class RecentRecordsFrame(ctk.CTkFrame if ctk else tk.Frame):
 
 
 class RecoleccionesApp:
+    PAGE = "recoleccion"
+
     def __init__(self, root, on_navigate=None, on_logout=None, datos=None, fabrica=None):
         self.root = root
         self.on_navigate = on_navigate
@@ -289,11 +294,20 @@ class RecoleccionesApp:
         self.canvas_frame.grid_columnconfigure(0, weight=0, minsize=440)
         self.canvas_frame.grid_columnconfigure(1, weight=1)
 
+        # Consultas en paralelo con spinner; los paneles se arman cuando llegan los datos.
+        cargar_con_spinner(self.canvas_frame, {
+            "responsables": (self.datos.listar_responsables, "Cargando estudiantes…"),
+            "lugares": (self.datos.listar_lugares, "Cargando lugares de recolección…"),
+            "recientes": (self.datos.recolecciones_recientes, "Obteniendo últimos registros…"),
+        }, self._construir_paneles)
+
+    def _construir_paneles(self, cargas):
         self.form = RecoleccionesForm(self.canvas_frame, on_register_callback=self.on_new_record,
-                                      datos=self.datos, fabrica=self.fw)
+                                      datos=self.datos, fabrica=self.fw, precarga=cargas)
         self.form.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
 
-        self.recent_records = RecentRecordsFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw)
+        self.recent_records = RecentRecordsFrame(self.canvas_frame, datos=self.datos, fabrica=self.fw,
+                                                 precarga=cargas)
         self.recent_records.grid(row=0, column=1, sticky="nsew", pady=10)
 
     def on_new_record(self):
@@ -304,10 +318,6 @@ class RecoleccionesApp:
             self.on_navigate("inicio")
 
     def on_registrar_select(self, choice):
-        # Restaura la etiqueta del menú (solo en la versión ctk).
-        if hasattr(self, "registrar_btn") and ctk:
-            self.registrar_btn.set("REGISTRAR ▾")
-
         if choice == "Recolección":
             # Ya estamos en la página de recolecciones.
             return

@@ -90,7 +90,8 @@ def show_main_app(page: str = "inicio") -> str:
                                   datos=_cont.datos, proyeccion=_cont.proyeccion, fabrica=_fabrica)
     elif page == "historico":
         historico_ui.HistoricoApp(root, on_navigate=navigate, on_logout=on_logout,
-                                  datos=_cont.datos, proyeccion=_cont.proyeccion, fabrica=_fabrica)
+                                  datos=_cont.datos, proyeccion=_cont.proyeccion, fabrica=_fabrica,
+                                  informe=_cont.informe)
     else:
         inicio_ui.VorTrackApp(root, on_navigate=navigate, on_logout=on_logout)
 

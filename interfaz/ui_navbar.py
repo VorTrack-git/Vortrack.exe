@@ -7,6 +7,7 @@ import tkinter as tk
 
 from interfaz.ui_tema import COLORS, FONT_FAMILY
 from interfaz.ui_dialogos import bind_footer_link
+from interfaz.ui_desplegable import MenuDesplegable
 
 try:
     # pyrefly: ignore [missing-import]
@@ -15,12 +16,24 @@ except ImportError:
     ctk = None
 
 
+_PAGINA_A_OPCION = {"recoleccion": "Recolección", "transformacion": "Transformación", "impresion": "Impresión"}
+
+
+def build_registrar_menu(parent, app):
+    """Menú desplegable "REGISTRAR" (animado). Resalta la página actual si `app.PAGE` es una de ellas."""
+    menu = MenuDesplegable(parent, "REGISTRAR", list(_PAGINA_A_OPCION.values()), app.on_registrar_select,
+                           activo=_PAGINA_A_OPCION.get(getattr(app, "PAGE", None)),
+                           font_size=10)
+    menu.pack(side="left", padx=4 if ctk else 10)
+    return menu
+
+
 def build_app_navbar(app):
     """Construye la barra de navegación estándar de las páginas autenticadas.
 
     Espera que `app` tenga: main_container, icon_path, load_ctk_image(),
     y los callbacks ir_a_inicio(), ir_a_historico(), on_registrar_select(choice)
-    y logout(). Guarda `app.registrar_btn` en la versión ctk.
+    y logout(). Guarda el menú "REGISTRAR" en `app.registrar_menu`.
     """
     COL = COLORS
     navbar_outer = tk.Frame(app.main_container, bg=COL["surface_container"], height=70)
@@ -52,24 +65,7 @@ def build_app_navbar(app):
     lbl_quienes.pack(side="left", padx=16)
     lbl_quienes.bind("<Button-1>", lambda _e: app.ir_a_inicio())
 
-    if ctk:
-        app.registrar_btn = ctk.CTkOptionMenu(
-            nav_items_frame, values=["REGISTRAR ▾", "Recolección", "Transformación", "Impresión"],
-            fg_color=COL["surface_container"], button_color=COL["surface_high"], button_hover_color=COL["surface_bright"],
-            text_color=COL["on_surface_variant"], dropdown_fg_color=COL["surface_container"], dropdown_hover_color=COL["surface_bright"],
-            dropdown_text_color=COL["on_surface"], font=(FONT_FAMILY, 11, "bold"), dynamic_resizing=False,
-            width=130, height=32, corner_radius=12, command=app.on_registrar_select
-        )
-        app.registrar_btn.set("REGISTRAR ▾")
-        app.registrar_btn.pack(side="left", padx=10)
-    else:
-        registrar_btn = tk.Menubutton(nav_items_frame, text="REGISTRAR ▾", fg=COL["on_surface_variant"], bg=COL["surface_container"],
-                                      activebackground=COL["surface_bright"], activeforeground=COL["primary_fixed"], font=(FONT_FAMILY, 10, "bold"), bd=0, cursor="hand2")
-        registrar_menu = tk.Menu(registrar_btn, tearoff=0, bg=COL["surface_container"], fg=COL["on_surface"])
-        for et in ("Recolección", "Transformación", "Impresión"):
-            registrar_menu.add_command(label=et, command=lambda e=et: app.on_registrar_select(e))
-        registrar_btn.config(menu=registrar_menu)
-        registrar_btn.pack(side="left", padx=16)
+    app.registrar_menu = build_registrar_menu(nav_items_frame, app)
 
     if ctk:
         btn_hist = ctk.CTkButton(nav_items_frame, text="HISTÓRICO INFORMES", fg_color="transparent", hover_color=COL["surface_bright"],
