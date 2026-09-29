@@ -7,7 +7,9 @@ Ofrece CRUD sobre:
   - Recolecciones (JornadasRecoleccion)
 
 Los cambios se guardan en la base y se reflejan en el resto del sistema al
-recargar cada página.
+recargar cada página. Todas las consultas corren en hilos con el spinner
+encima de la sección (las de cada sección, en paralelo), así la ventana nunca
+se congela mientras responde la base.
 """
 
 import os
@@ -18,6 +20,7 @@ import servicios.auth as auth
 import interfaz.ui_utils as ui_utils
 import datos.repositorio as repositorio
 import servicios.validaciones as validaciones
+from interfaz.ui_cargando import RETARDO_S, cargar_con_spinner, ejecutar_con_spinner
 from interfaz.ui_tema import COLORS, FONT_FAMILY
 
 try:
@@ -47,6 +50,7 @@ class AdminApp:
         self.icon_path = ui_utils.ruta_logo("VorTrack icon.png")
 
         self._seccion = "estudiantes"
+        self._ocupado = False  # hay una consulta/guardado en curso en la sección
         self._est_selected = None
         self._rec_selected = None
 
@@ -220,6 +224,8 @@ class AdminApp:
          "impresiones": self._show_impresiones}[key]()
 
     def _clear_content(self):
+        # Lo que estuviera en curso muere con la sección (su spinner se destruye).
+        self._ocupado = False
         for w in self.content.winfo_children():
             w.destroy()
 
@@ -229,7 +235,7 @@ class AdminApp:
         self._cambiar_seg_highlight("estudiantes")
         self._est_selected = None
 
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=0, minsize=360)
         wrap.grid_columnconfigure(1, weight=1)
@@ -275,23 +281,22 @@ class AdminApp:
         # Al abrir la sección se "presiona" Refrescar para mostrar los datos de una vez.
         self._est_refrescar()
 
+    @staticmethod
+    def _est_valores(n, fila):
+        # Se muestra un número de fila secuencial (#) en vez del IdUsuario interno.
+        idu, nom, ape, correo, tel, pwd, estado = fila
+        return idu, (n, nom or "", ape or "", correo or "", tel or "", pwd or "", estado or "")
+
     def _cambiar_seg_highlight(self, key):
         if hasattr(self, "_seg_buttons"):
             for k, b in self._seg_buttons.items():
                 b.configure(fg=COLORS["primary_fixed"] if k == key else COLORS["on_surface_variant"])
 
     def _est_recargar(self):
-        for it in self.est_tree.get_children():
-            self.est_tree.delete(it)
-        try:
-            filas = self.datos.listar_estudiantes()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar la lista:\n{exc}")
-            return
-        # Se muestra un número de fila secuencial (#) en vez del IdUsuario interno.
-        for n, (idu, nom, ape, correo, tel, pwd, estado) in enumerate(filas, start=1):
-            self.est_tree.insert("", "end", iid=str(idu),
-                                 values=(n, nom or "", ape or "", correo or "", tel or "", pwd or "", estado or ""))
+        self._cargar_tabla(self.est_tree, self.datos.listar_estudiantes, self._est_valores, "Cargando estudiantes…")
+
+    def _est_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.est_tree, self.datos.listar_estudiantes, self._est_valores, titulo, **kw)
 
     def _est_on_select(self, _event=None):
         sel = self.est_tree.selection()
@@ -329,15 +334,9 @@ class AdminApp:
         if not datos:
             return
         nombres, apellidos, correo, telefono, pwd, _estado = datos
-        try:
-            self.datos.crear_estudiante(nombres, apellidos, correo, telefono, pwd)
-        except ValueError as exc:
-            messagebox.showwarning("Error", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al guardar", str(exc)); return
-        messagebox.showinfo("Estudiante", "Estudiante creado correctamente.")
-        self._est_limpiar()
-        self._est_recargar()
+        self._est_operar(lambda: self.datos.crear_estudiante(nombres, apellidos, correo, telefono, pwd),
+                         "Guardando estudiante…", titulo_error="Error al guardar",
+                         ok=("Estudiante", "Estudiante creado correctamente."), despues=self._est_limpiar)
 
     def _est_actualizar(self):
         if self._est_selected is None:
@@ -346,26 +345,19 @@ class AdminApp:
         if not datos:
             return
         nombres, apellidos, correo, telefono, pwd, estado = datos
-        try:
-            self.datos.actualizar_estudiante(self._est_selected, nombres, apellidos, correo, telefono, pwd, estado)
-        except ValueError as exc:
-            messagebox.showwarning("Error", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Estudiante", "Estudiante actualizado.")
-        self._est_recargar()
+        idu = self._est_selected
+        self._est_operar(lambda: self.datos.actualizar_estudiante(idu, nombres, apellidos, correo, telefono, pwd, estado),
+                         "Actualizando estudiante…", titulo_error="Error al actualizar",
+                         ok=("Estudiante", "Estudiante actualizado."))
 
     def _est_eliminar(self):
         if self._est_selected is None:
             messagebox.showwarning("Error", "Seleccione un estudiante para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar este estudiante? Esta acción no se puede deshacer."):
             return
-        try:
-            self.datos.eliminar_estudiante(self._est_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al eliminar", str(exc)); return
-        self._est_limpiar()
-        self._est_recargar()
+        idu = self._est_selected
+        self._est_operar(lambda: self.datos.eliminar_estudiante(idu), "Eliminando estudiante…",
+                         titulo_error="Error al eliminar", titulo_aviso="Error al eliminar", despues=self._est_limpiar)
 
     def _est_limpiar(self):
         self._est_selected = None
@@ -387,7 +379,7 @@ class AdminApp:
         self._cambiar_seg_highlight("lugares")
         self._lug_selected = None
 
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=0, minsize=340)
         wrap.grid_columnconfigure(1, weight=1)
@@ -418,15 +410,16 @@ class AdminApp:
                   font=(FONT_FAMILY, 11, "bold"), padx=14, pady=7, cursor="hand2").pack(side="left")
         self._lug_refrescar()
 
+    @staticmethod
+    def _lug_valores(n, fila):
+        idl, nombre, desc = fila
+        return idl, (n, nombre or "", desc or "")
+
     def _lug_recargar(self):
-        for it in self.lug_tree.get_children():
-            self.lug_tree.delete(it)
-        try:
-            filas = self.datos.listar_lugares_admin()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
-        for n, (idl, nombre, desc) in enumerate(filas, start=1):
-            self.lug_tree.insert("", "end", iid=str(idl), values=(n, nombre or "", desc or ""))
+        self._cargar_tabla(self.lug_tree, self.datos.listar_lugares_admin, self._lug_valores, "Cargando lugares…")
+
+    def _lug_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.lug_tree, self.datos.listar_lugares_admin, self._lug_valores, titulo, **kw)
 
     def _lug_on_select(self, _e=None):
         sel = self.lug_tree.selection()
@@ -440,14 +433,10 @@ class AdminApp:
         nombre = self.l_nombre.get().strip()
         if not nombre:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
-        try:
-            self.datos.crear_lugar(nombre, self.l_desc.get().strip())
-        except ValueError as exc:
-            messagebox.showwarning("No se pudo guardar", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al guardar", str(exc)); return
-        messagebox.showinfo("Lugar", "Lugar creado.")
-        self._lug_refrescar()
+        desc = self.l_desc.get().strip()
+        self._lug_operar(lambda: self.datos.crear_lugar(nombre, desc), "Guardando lugar…",
+                         titulo_error="Error al guardar", titulo_aviso="No se pudo guardar",
+                         ok=("Lugar", "Lugar creado."), despues=self._lug_limpiar)
 
     def _lug_editar(self):
         if self._lug_selected is None:
@@ -455,30 +444,28 @@ class AdminApp:
         nombre = self.l_nombre.get().strip()
         if not nombre:
             messagebox.showwarning("Error", "El nombre del lugar es obligatorio."); return
-        try:
-            self.datos.actualizar_lugar(self._lug_selected, nombre, self.l_desc.get().strip())
-        except ValueError as exc:
-            messagebox.showwarning("No se pudo actualizar", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Lugar", "Lugar actualizado.")
-        self._lug_recargar()
+        idl, desc = self._lug_selected, self.l_desc.get().strip()
+        self._lug_operar(lambda: self.datos.actualizar_lugar(idl, nombre, desc), "Actualizando lugar…",
+                         titulo_error="Error al actualizar", titulo_aviso="No se pudo actualizar",
+                         ok=("Lugar", "Lugar actualizado."))
 
     def _lug_eliminar(self):
         if self._lug_selected is None:
             messagebox.showwarning("Error", "Seleccione un lugar para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar este lugar?"):
             return
-        try:
-            self.datos.eliminar_lugar(self._lug_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("No se puede eliminar", str(exc)); return
-        self._lug_refrescar()
+        idl = self._lug_selected
+        self._lug_operar(lambda: self.datos.eliminar_lugar(idl), "Eliminando lugar…",
+                         titulo_error="No se puede eliminar", titulo_aviso="No se puede eliminar",
+                         despues=self._lug_limpiar)
+
+    def _lug_limpiar(self):
+        self._lug_selected = None
+        self.l_nombre.delete(0, "end"); self.l_desc.delete(0, "end")
 
     def _lug_refrescar(self):
         self._lug_recargar()
-        self._lug_selected = None
-        self.l_nombre.delete(0, "end"); self.l_desc.delete(0, "end")
+        self._lug_limpiar()
 
     # ----------------------------------------------------------------- MODELOS
     def _show_modelos(self):
@@ -486,7 +473,7 @@ class AdminApp:
         self._cambiar_seg_highlight("modelos")
         self._mod_selected = None
 
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=0, minsize=340)
         wrap.grid_columnconfigure(1, weight=1)
@@ -519,18 +506,18 @@ class AdminApp:
                   font=(FONT_FAMILY, 11, "bold"), padx=14, pady=7, cursor="hand2").pack(side="left")
         self._mod_refrescar()
 
+    @staticmethod
+    def _mod_valores(n, fila):
+        idm, nombre, cat, tiempo, peso = fila
+        return idm, (n, nombre or "", cat or "",
+                     f"{float(tiempo):g}" if tiempo is not None else "",
+                     f"{float(peso):g}" if peso is not None else "")
+
     def _mod_recargar(self):
-        for it in self.mod_tree.get_children():
-            self.mod_tree.delete(it)
-        try:
-            filas = self.datos.listar_modelos_admin()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
-        for n, (idm, nombre, cat, tiempo, peso) in enumerate(filas, start=1):
-            self.mod_tree.insert("", "end", iid=str(idm), values=(
-                n, nombre or "", cat or "",
-                f"{float(tiempo):g}" if tiempo is not None else "",
-                f"{float(peso):g}" if peso is not None else ""))
+        self._cargar_tabla(self.mod_tree, self.datos.listar_modelos_admin, self._mod_valores, "Cargando modelos…")
+
+    def _mod_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.mod_tree, self.datos.listar_modelos_admin, self._mod_valores, titulo, **kw)
 
     def _mod_on_select(self, _e=None):
         sel = self.mod_tree.selection()
@@ -564,14 +551,9 @@ class AdminApp:
         datos = self._mod_leer()
         if not datos:
             return
-        try:
-            self.datos.crear_modelo(*datos)
-        except ValueError as exc:
-            messagebox.showwarning("No se pudo guardar", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al guardar", str(exc)); return
-        messagebox.showinfo("Modelo", "Modelo creado.")
-        self._mod_refrescar()
+        self._mod_operar(lambda: self.datos.crear_modelo(*datos), "Guardando modelo…",
+                         titulo_error="Error al guardar", titulo_aviso="No se pudo guardar",
+                         ok=("Modelo", "Modelo creado."), despues=self._mod_limpiar)
 
     def _mod_editar(self):
         if self._mod_selected is None:
@@ -579,48 +561,38 @@ class AdminApp:
         datos = self._mod_leer()
         if not datos:
             return
-        try:
-            self.datos.actualizar_modelo(self._mod_selected, *datos)
-        except ValueError as exc:
-            messagebox.showwarning("No se pudo actualizar", str(exc)); return
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Modelo", "Modelo actualizado.")
-        self._mod_recargar()
+        idm = self._mod_selected
+        self._mod_operar(lambda: self.datos.actualizar_modelo(idm, *datos), "Actualizando modelo…",
+                         titulo_error="Error al actualizar", titulo_aviso="No se pudo actualizar",
+                         ok=("Modelo", "Modelo actualizado."))
 
     def _mod_eliminar(self):
         if self._mod_selected is None:
             messagebox.showwarning("Error", "Seleccione un modelo para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar este modelo?"):
             return
-        try:
-            self.datos.eliminar_modelo(self._mod_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("No se puede eliminar", str(exc)); return
-        self._mod_refrescar()
+        idm = self._mod_selected
+        self._mod_operar(lambda: self.datos.eliminar_modelo(idm), "Eliminando modelo…",
+                         titulo_error="No se puede eliminar", titulo_aviso="No se puede eliminar",
+                         despues=self._mod_limpiar)
 
-    def _mod_refrescar(self):
-        self._mod_recargar()
+    def _mod_limpiar(self):
         self._mod_selected = None
         for e in (self.m_nombre, self.m_categoria, self.m_tiempo, self.m_peso):
             e.delete(0, "end")
+
+    def _mod_refrescar(self):
+        self._mod_recargar()
+        self._mod_limpiar()
 
     # ---------------------------------------------------------- RECOLECCIONES
     def _show_recolecciones(self):
         self._clear_content()
         self._cambiar_seg_highlight("recolecciones")
         self._rec_selected = None
+        self._resp_by_name, self._lug_by_name = {}, {}
 
-        try:
-            self._responsables = self.datos.listar_responsables()
-            self._lugares = self.datos.listar_lugares()
-        except Exception as exc:  # noqa: BLE001
-            self._responsables, self._lugares = [], []
-            messagebox.showwarning("Base de datos", f"No se pudieron cargar catálogos:\n{exc}")
-        self._resp_by_name = {n: i for i, n in self._responsables}
-        self._lug_by_name = {n: i for i, n in self._lugares}
-
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_columnconfigure(1, weight=0, minsize=340)
@@ -650,32 +622,40 @@ class AdminApp:
                  bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(anchor="w", pady=(0, 4))
 
         self.r_fecha = self._field(fi, "Fecha (dd/mm/aaaa)")
-        resp_vals = ["Seleccione..."] + [n for _, n in self._responsables]
-        lug_vals = ["Seleccione..."] + [n for _, n in self._lugares]
-        self.r_resp_combo, self.r_resp_var = self._combo(fi, "Responsable", resp_vals)
-        self.r_lug_combo, self.r_lug_var = self._combo(fi, "Lugar", lug_vals)
+        self.r_resp_combo, self.r_resp_var = self._combo(fi, "Responsable", ["Seleccione..."])
+        self.r_lug_combo, self.r_lug_var = self._combo(fi, "Lugar", ["Seleccione..."])
         self.r_botellas = self._field(fi, "Cantidad de botellas")
         self.r_peso = self._field(fi, "Peso PET (kg)")
         self.r_obs = self._field(fi, "Observaciones")
 
         self._button(fi, "Editar recolección", self._rec_actualizar, COLORS["secondary_container"])
 
-        self._rec_recargar()
+        # Tabla y catálogos de los combos se consultan a la vez.
+        self._cargar({
+            "filas": (self.datos.recolecciones_admin, "Cargando recolecciones…"),
+            "responsables": (self.datos.listar_responsables, "Cargando responsables…"),
+            "lugares": (self.datos.listar_lugares, "Cargando lugares…"),
+        }, self._rec_poblar)
 
-    def _rec_recargar(self):
-        for it in self.rec_tree.get_children():
-            self.rec_tree.delete(it)
-        try:
-            filas = self.datos.recolecciones_admin()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}")
-            return
-        for idj, fecha, resp, lugar, botellas, peso, obs in filas:
-            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
-            self.rec_tree.insert("", "end", iid=str(idj), values=(
-                idj, f, resp or "", lugar or "",
-                botellas if botellas is not None else "",
-                f"{float(peso):g}" if peso is not None else "", obs or ""))
+    def _rec_poblar(self, futuros):
+        responsables = self._catalogo(futuros, "responsables", "los responsables")
+        lugares = self._catalogo(futuros, "lugares", "los lugares")
+        self._resp_by_name = {n: i for i, n in responsables}
+        self._lug_by_name = {n: i for i, n in lugares}
+        self._combo_valores(self.r_resp_combo, self.r_resp_var, ["Seleccione..."] + [n for _, n in responsables])
+        self._combo_valores(self.r_lug_combo, self.r_lug_var, ["Seleccione..."] + [n for _, n in lugares])
+        self._llenar(self.rec_tree, futuros["filas"], self._rec_valores)
+
+    @staticmethod
+    def _rec_valores(_n, fila):
+        idj, fecha, resp, lugar, botellas, peso, obs = fila
+        f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else str(fecha)
+        return idj, (idj, f, resp or "", lugar or "",
+                     botellas if botellas is not None else "",
+                     f"{float(peso):g}" if peso is not None else "", obs or "")
+
+    def _rec_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.rec_tree, self.datos.recolecciones_admin, self._rec_valores, titulo, **kw)
 
     def _rec_on_select(self, _event=None):
         sel = self.rec_tree.selection()
@@ -709,39 +689,29 @@ class AdminApp:
             if not ok_bot:
                 messagebox.showwarning("Error", "Botellas debe ser un entero."); return
         obs = self.r_obs.get().strip()
-        try:
-            self.datos.actualizar_jornada(self._rec_selected, fecha, id_lug, id_resp, botellas_val, peso_val, obs)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Recolección", "Recolección actualizada.")
-        self._rec_recargar()
+        idj = self._rec_selected
+        self._rec_operar(lambda: self.datos.actualizar_jornada(idj, fecha, id_lug, id_resp, botellas_val, peso_val, obs),
+                         "Actualizando recolección…", titulo_error="Error al actualizar",
+                         titulo_aviso="Error al actualizar", ok=("Recolección", "Recolección actualizada."))
 
     def _rec_eliminar(self):
         if self._rec_selected is None:
             messagebox.showwarning("Error", "Seleccione una recolección para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta recolección?"):
             return
-        try:
-            self.datos.eliminar_jornada(self._rec_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("No se puede eliminar", str(exc)); return
+        idj = self._rec_selected
         self._rec_selected = None
-        self._rec_recargar()
+        self._rec_operar(lambda: self.datos.eliminar_jornada(idj), "Eliminando recolección…",
+                         titulo_error="No se puede eliminar", titulo_aviso="No se puede eliminar")
 
     # -------------------------------------------------------- TRANSFORMACIONES
     def _show_transformaciones(self):
         self._clear_content()
         self._cambiar_seg_highlight("transformaciones")
         self._trans_selected = None
-        try:
-            self._jornadas = self.datos.listar_jornadas()
-        except Exception as exc:  # noqa: BLE001
-            self._jornadas = []
-            messagebox.showwarning("Base de datos", f"No se pudieron cargar jornadas:\n{exc}")
-        self._jornada_lbl_by_id = {i: lab for i, lab, _ in self._jornadas}
-        self._jornada_id_by_lbl = {lab: i for i, lab, _ in self._jornadas}
+        self._jornada_lbl_by_id, self._jornada_id_by_lbl = {}, {}
 
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_columnconfigure(1, weight=0, minsize=340)
@@ -765,30 +735,38 @@ class AdminApp:
         tk.Label(fi, text="Editar transformación", font=(FONT_FAMILY, 16, "bold"),
                  bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(anchor="w", pady=(0, 4))
         self.t_fecha = self._field(fi, "Fecha (dd/mm/aaaa)")
-        jvals = ["Seleccione..."] + [lab for _, lab, _ in self._jornadas]
-        self.t_jornada_combo, self.t_jornada_var = self._combo(fi, "Jornada de origen", jvals)
+        self.t_jornada_combo, self.t_jornada_var = self._combo(fi, "Jornada de origen", ["Seleccione..."])
         self.t_color = self._field(fi, "Color")
         self.t_diam = self._field(fi, "Diámetro (mm)")
         self.t_salido = self._field(fi, "Peso salido (kg)")
         self.t_metros = self._field(fi, "Metros producidos")
         self.t_obs = self._field(fi, "Observaciones")
         self._button(fi, "Editar transformación", self._trans_editar, COLORS["secondary_container"])
-        self._trans_recargar()
 
-    def _trans_recargar(self):
-        for it in self.trans_tree.get_children():
-            self.trans_tree.delete(it)
-        try:
-            filas = self.datos.producciones_admin()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
-        for idp, fecha, idj, color, diam, salido, metros, obs in filas:
-            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
-            self.trans_tree.insert("", "end", iid=str(idp), values=(
-                idp, f, f"#{idj}" if idj is not None else "", color or "",
-                f"{float(diam):g}" if diam is not None else "",
-                f"{float(salido):g}" if salido is not None else "",
-                f"{float(metros):g}" if metros is not None else "", obs or ""))
+        self._cargar({
+            "filas": (self.datos.producciones_admin, "Cargando transformaciones…"),
+            "jornadas": (self.datos.listar_jornadas, "Cargando jornadas…"),
+        }, self._trans_poblar)
+
+    def _trans_poblar(self, futuros):
+        jornadas = self._catalogo(futuros, "jornadas", "las jornadas")
+        self._jornada_lbl_by_id = {i: lab for i, lab, _ in jornadas}
+        self._jornada_id_by_lbl = {lab: i for i, lab, _ in jornadas}
+        self._combo_valores(self.t_jornada_combo, self.t_jornada_var,
+                            ["Seleccione..."] + [lab for _, lab, _ in jornadas])
+        self._llenar(self.trans_tree, futuros["filas"], self._trans_valores)
+
+    @staticmethod
+    def _trans_valores(_n, fila):
+        idp, fecha, idj, color, diam, salido, metros, obs = fila
+        f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
+        return idp, (idp, f, f"#{idj}" if idj is not None else "", color or "",
+                     f"{float(diam):g}" if diam is not None else "",
+                     f"{float(salido):g}" if salido is not None else "",
+                     f"{float(metros):g}" if metros is not None else "", obs or "")
+
+    def _trans_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.trans_tree, self.datos.producciones_admin, self._trans_valores, titulo, **kw)
 
     def _trans_on_select(self, _e=None):
         sel = self.trans_tree.selection()
@@ -820,43 +798,31 @@ class AdminApp:
             ok_d, diam_val = validaciones.numero(d)
             if not ok_d:
                 messagebox.showwarning("Error", "Diámetro inválido."); return
-        try:
-            self.datos.actualizar_produccion(self._trans_selected, id_jornada, self.t_fecha.get().strip(),
-                                              self.t_color.get().strip(), diam_val, salido_val, metros_val,
-                                              self.t_obs.get().strip())
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Transformación", "Transformación actualizada.")
-        self._trans_recargar()
+        idp, fecha = self._trans_selected, self.t_fecha.get().strip()
+        color, obs = self.t_color.get().strip(), self.t_obs.get().strip()
+        self._trans_operar(lambda: self.datos.actualizar_produccion(idp, id_jornada, fecha, color, diam_val,
+                                                                     salido_val, metros_val, obs),
+                           "Actualizando transformación…", titulo_error="Error al actualizar",
+                           titulo_aviso="Error al actualizar", ok=("Transformación", "Transformación actualizada."))
 
     def _trans_eliminar(self):
         if self._trans_selected is None:
             messagebox.showwarning("Error", "Seleccione una transformación para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta transformación?"):
             return
-        try:
-            self.datos.eliminar_produccion(self._trans_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("No se puede eliminar", str(exc)); return
+        idp = self._trans_selected
         self._trans_selected = None
-        self._trans_recargar()
+        self._trans_operar(lambda: self.datos.eliminar_produccion(idp), "Eliminando transformación…",
+                           titulo_error="No se puede eliminar", titulo_aviso="No se puede eliminar")
 
     # ------------------------------------------------------------- IMPRESIONES
     def _show_impresiones(self):
         self._clear_content()
         self._cambiar_seg_highlight("impresiones")
         self._imp_selected = None
-        try:
-            self._modelos = self.datos.listar_modelos()
-            self._producciones = self.datos.listar_producciones()
-        except Exception as exc:  # noqa: BLE001
-            self._modelos, self._producciones = [], []
-            messagebox.showwarning("Base de datos", f"No se pudieron cargar catálogos:\n{exc}")
-        self._modelo_id_by_name = {n: i for i, n in self._modelos}
-        self._prod_lbl_by_id = {i: lab for i, lab, _ in self._producciones}
-        self._prod_id_by_lbl = {lab: i for i, lab, _ in self._producciones}
+        self._modelo_id_by_name, self._prod_lbl_by_id, self._prod_id_by_lbl = {}, {}, {}
 
-        wrap = tk.Frame(self.content, bg=COLORS["background"])
+        wrap = self._wrap = tk.Frame(self.content, bg=COLORS["background"])
         wrap.pack(fill="both", expand=True, padx=30, pady=20)
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_columnconfigure(1, weight=0, minsize=340)
@@ -880,31 +846,42 @@ class AdminApp:
         tk.Label(fi, text="Editar impresión", font=(FONT_FAMILY, 16, "bold"),
                  bg=COLORS["surface_container"], fg=COLORS["primary_fixed"]).pack(anchor="w", pady=(0, 4))
         self.i_fecha = self._field(fi, "Fecha (dd/mm/aaaa)")
-        mvals = ["Seleccione..."] + [n for _, n in self._modelos]
-        self.i_modelo_combo, self.i_modelo_var = self._combo(fi, "Modelo", mvals)
-        pvals = ["Seleccione..."] + [lab for _, lab, _ in self._producciones]
-        self.i_prod_combo, self.i_prod_var = self._combo(fi, "Filamento (producción)", pvals)
+        self.i_modelo_combo, self.i_modelo_var = self._combo(fi, "Modelo", ["Seleccione..."])
+        self.i_prod_combo, self.i_prod_var = self._combo(fi, "Filamento (producción)", ["Seleccione..."])
         self.i_cantidad = self._field(fi, "Cantidad de piezas")
         self.i_peso = self._field(fi, "Peso utilizado (g)")
         self.i_tiempo = self._field(fi, "Tiempo (min)")
         self.i_estado_combo, self.i_estado_var = self._combo(fi, "Estado", ["En proceso", "Finalizado", "Fallido"])
         self._button(fi, "Editar impresión", self._imp_editar, COLORS["secondary_container"])
-        self._imp_recargar()
 
-    def _imp_recargar(self):
-        for it in self.imp_tree.get_children():
-            self.imp_tree.delete(it)
-        try:
-            filas = self.datos.fabricaciones_admin()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Base de datos", f"No se pudo cargar:\n{exc}"); return
-        for idf, fecha, _idm, modelo, idp, cant, peso, tiempo, estado in filas:
-            f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
-            self.imp_tree.insert("", "end", iid=str(idf), values=(
-                idf, f, modelo or "", f"#{idp}" if idp is not None else "",
-                cant if cant is not None else "",
-                f"{float(peso):g}" if peso is not None else "",
-                tiempo if tiempo is not None else "", estado or ""))
+        self._cargar({
+            "filas": (self.datos.fabricaciones_admin, "Cargando impresiones…"),
+            "modelos": (self.datos.listar_modelos, "Cargando modelos…"),
+            "producciones": (self.datos.listar_producciones, "Cargando filamentos…"),
+        }, self._imp_poblar)
+
+    def _imp_poblar(self, futuros):
+        modelos = self._catalogo(futuros, "modelos", "los modelos")
+        producciones = self._catalogo(futuros, "producciones", "los filamentos")
+        self._modelo_id_by_name = {n: i for i, n in modelos}
+        self._prod_lbl_by_id = {i: lab for i, lab, _ in producciones}
+        self._prod_id_by_lbl = {lab: i for i, lab, _ in producciones}
+        self._combo_valores(self.i_modelo_combo, self.i_modelo_var, ["Seleccione..."] + [n for _, n in modelos])
+        self._combo_valores(self.i_prod_combo, self.i_prod_var,
+                            ["Seleccione..."] + [lab for _, lab, _ in producciones])
+        self._llenar(self.imp_tree, futuros["filas"], self._imp_valores)
+
+    @staticmethod
+    def _imp_valores(_n, fila):
+        idf, fecha, _idm, modelo, idp, cant, peso, tiempo, estado = fila
+        f = fecha.strftime("%d/%m/%Y") if hasattr(fecha, "strftime") else (str(fecha) if fecha else "")
+        return idf, (idf, f, modelo or "", f"#{idp}" if idp is not None else "",
+                     cant if cant is not None else "",
+                     f"{float(peso):g}" if peso is not None else "",
+                     tiempo if tiempo is not None else "", estado or "")
+
+    def _imp_operar(self, escribir, titulo, **kw):
+        self._operar(escribir, self.imp_tree, self.datos.fabricaciones_admin, self._imp_valores, titulo, **kw)
 
     def _imp_on_select(self, _e=None):
         sel = self.imp_tree.selection()
@@ -936,25 +913,121 @@ class AdminApp:
         if not (ok_c and ok_p and ok_t):
             messagebox.showwarning("Error", "Piezas, peso y tiempo deben ser numéricos."); return
         tiempo = int(tiempo_f)
-        try:
-            self.datos.actualizar_fabricacion(self._imp_selected, id_modelo, id_prod,
-                                               self.i_fecha.get().strip(), cantidad, peso, tiempo, estado)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al actualizar", str(exc)); return
-        messagebox.showinfo("Impresión", "Impresión actualizada.")
-        self._imp_recargar()
+        idf, fecha = self._imp_selected, self.i_fecha.get().strip()
+        self._imp_operar(lambda: self.datos.actualizar_fabricacion(idf, id_modelo, id_prod, fecha,
+                                                                    cantidad, peso, tiempo, estado),
+                         "Actualizando impresión…", titulo_error="Error al actualizar",
+                         titulo_aviso="Error al actualizar", ok=("Impresión", "Impresión actualizada."))
 
     def _imp_eliminar(self):
         if self._imp_selected is None:
             messagebox.showwarning("Error", "Seleccione una impresión para eliminar."); return
         if not messagebox.askyesno("Confirmar", "¿Eliminar esta impresión?"):
             return
-        try:
-            self.datos.eliminar_fabricacion(self._imp_selected)
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Error al eliminar", str(exc)); return
+        idf = self._imp_selected
         self._imp_selected = None
-        self._imp_recargar()
+        self._imp_operar(lambda: self.datos.eliminar_fabricacion(idf), "Eliminando impresión…",
+                         titulo_error="Error al eliminar", titulo_aviso="Error al eliminar")
+
+    # ------------------------------------------------------- carga en paralelo
+    def _ocupar(self, al_terminar):
+        """Marca la sección como ocupada y devuelve el callback que la libera.
+
+        El spinner solo aparece si la base tarda más de RETARDO_S; mientras
+        tanto, esto evita que un doble clic lance la misma operación dos veces.
+        Devuelve None si ya había algo en curso.
+        """
+        if self._ocupado:
+            return None
+        self._ocupado = True
+
+        def liberar(*args):
+            self._ocupado = False
+            al_terminar(*args)
+        return liberar
+
+    def _cargar(self, cargas, al_terminar, titulo="Obteniendo datos…"):
+        """Lanza las consultas de la sección a la vez, con el spinner encima."""
+        al_terminar = self._ocupar(al_terminar)
+        if al_terminar:
+            cargar_con_spinner(self._wrap, cargas, al_terminar, titulo=titulo, retardo_s=RETARDO_S)
+
+    def _cargar_tabla(self, tree, listar, valores, texto):
+        """Recarga solo la tabla (en un hilo, con spinner)."""
+        self._cargar({"filas": (listar, texto)}, lambda f: self._llenar(tree, f["filas"], valores), titulo=texto)
+
+    def _llenar(self, tree, futuro, valores):
+        """Vuelca en la tabla el resultado de una consulta (Future)."""
+        try:
+            filas = futuro.result()
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Base de datos", f"No se pudo cargar la lista:\n{exc}")
+            return
+        self._llenar_filas(tree, filas, valores)
+
+    @staticmethod
+    def _llenar_filas(tree, filas, valores):
+        tree.delete(*tree.get_children())
+        for n, fila in enumerate(filas, start=1):
+            iid, vals = valores(n, fila)
+            tree.insert("", "end", iid=str(iid), values=vals)
+
+    def _operar(self, escribir, tree, listar, valores, titulo, ok=None,
+                titulo_error="Error", titulo_aviso="Error", despues=None):
+        """Guarda/edita/elimina en un hilo y, en el mismo hilo, relee la tabla.
+
+        `escribir` no debe leer widgets (corre fuera del hilo principal): los
+        valores del formulario se toman antes de llamar. Un ValueError se
+        muestra como aviso (validación de negocio); otra excepción, como error.
+        """
+        def tarea(reportar):
+            reportar(0, 2, titulo)
+            escribir()
+            reportar(1, 2, "Actualizando la tabla…")
+            try:
+                return listar(), None
+            except Exception as exc:  # noqa: BLE001
+                return None, exc
+
+        def al_terminar(futuro):
+            try:
+                filas, error_lista = futuro.result()
+            except ValueError as exc:
+                messagebox.showwarning(titulo_aviso, str(exc)); return
+            except Exception as exc:  # noqa: BLE001
+                messagebox.showerror(titulo_error, str(exc)); return
+            if error_lista is not None:
+                messagebox.showerror("Base de datos", f"Se guardó, pero no se pudo recargar la lista:\n{error_lista}")
+            else:
+                self._llenar_filas(tree, filas, valores)
+            if despues:
+                despues()
+            if ok:
+                messagebox.showinfo(*ok)
+
+        al_terminar = self._ocupar(al_terminar)
+        if al_terminar:
+            ejecutar_con_spinner(self._wrap, tarea, al_terminar, titulo=titulo)
+
+    def _catalogo(self, futuros, clave, nombre):
+        """Resultado de un catálogo precargado; si falla, lista vacía y aviso."""
+        try:
+            return futuros[clave].result()
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showwarning("Base de datos", f"No se pudieron cargar {nombre}:\n{exc}")
+            return []
+
+    def _combo_valores(self, combo, var, values):
+        """Cambia las opciones de un combo ya creado (cuando llegan los catálogos)."""
+        if ctk:
+            combo.configure(values=values)
+            combo.set(values[0])
+            return
+        menu = combo["menu"]
+        menu.delete(0, "end")
+        for v in values:
+            menu.add_command(label=v, command=tk._setit(var, v))
+        var.set(values[0])
 
     # -------------------------------------------------------------- utilidades
     def _set(self, entry, value):

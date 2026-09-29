@@ -77,3 +77,28 @@ def set_window_icon(root):
         root.after(300, _apply)
     except Exception:
         pass
+
+
+def dialogos_sobre(obtener_ventana):
+    """Hace que los messagebox sin `parent` se abran sobre la ventana visible.
+
+    La app usa una raíz Tk oculta y una Toplevel por pantalla; sin esto, los
+    `messagebox.showinfo(...)` quedarían ligados a la raíz oculta (no modales
+    respecto a la pantalla y centrados en el escritorio).
+    """
+    from tkinter import messagebox
+
+    original = getattr(messagebox._show, "_vortrack_original", messagebox._show)
+
+    def _show(title=None, message=None, _icon=None, _type=None, **options):
+        if "parent" not in options:
+            ventana = obtener_ventana()
+            try:
+                if ventana is not None and ventana.winfo_exists():
+                    options["parent"] = ventana
+            except tk.TclError:
+                pass
+        return original(title, message, _icon, _type, **options)
+
+    _show._vortrack_original = original
+    messagebox._show = _show
