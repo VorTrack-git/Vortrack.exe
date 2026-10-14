@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VorTrack</title>
+<meta name="description" content="VorTrack: software de gestión y trazabilidad del proyecto TRANSORE ISC del Instituto San Carlos de La Salle. Del PET reciclado al material didáctico impreso en 3D. Prueba la demo.">
+<meta name="theme-color" content="#050608">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+/* Plantilla B · Noche neón — negro + cian VorTrack, Sora (títulos) + Manrope (texto) */
+:root{
+  --bg:#050608; --panel:rgba(255,255,255,.045); --panel2:rgba(255,255,255,.02); --borde:rgba(255,255,255,.09);
+  --cyan:#00f0ff; --cyan3:#7df4ff; --blue:#0056fd; --text:#c9d6e3; --muted:#8fa1b4; --dim:#66778a; --ok:#3ddc84;
+  --titulo:"Sora",system-ui,sans-serif; --cuerpo:"Manrope",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--cuerpo);line-height:1.6;overflow-x:hidden}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--cyan3)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 16px}
+section{padding:96px 0;scroll-margin-top:64px;position:relative}
+.badge{display:inline-block;border:1px solid rgba(0,240,255,.35);color:var(--cyan3);border-radius:999px;padding:6px 14px;font:600 12px var(--titulo);letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3,h4{font-family:var(--titulo);color:#fff;line-height:1.1;letter-spacing:-.02em}
+h2{font-size:clamp(30px,5vw,48px);font-weight:700;margin:18px 0 14px}
+h2 em{font-style:normal;background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--muted);font-size:clamp(15.5px,2vw,18px);max-width:680px}
+.center{text-align:center}.center .lead{margin:0 auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:0 26px;border-radius:12px;border:0;font:700 15px var(--cuerpo);text-decoration:none;transition:transform .15s,box-shadow .2s,background .2s}
+.btn:active{transform:scale(.97)}
+.btn-pri{background:var(--cyan);color:var(--bg);box-shadow:0 0 30px rgba(0,240,255,.35)}
+.btn-pri:hover{box-shadow:0 0 44px rgba(0,240,255,.6)}
+.btn-sec{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.14)}
+.btn-sec:hover{background:rgba(255,255,255,.12)}
+.n,.paso,.detalle,.rol,.fn,.capa,.stack,.card,.guia-tip{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--borde);border-radius:18px}
+.rv{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+
+/* barra superior */
+.top{position:fixed;inset:0 0 auto;z-index:100;transition:background .3s,border-color .3s;border-bottom:1px solid transparent}
+.top.solid{background:rgba(5,6,8,.8);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:var(--borde)}
+.top .wrap{height:66px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;font:700 20px var(--titulo)}
+.brand img{width:28px;height:28px}
+.top nav{display:flex;gap:4px;background:rgba(255,255,255,.05);border:1px solid var(--borde);padding:5px;border-radius:999px}
+.top nav a{color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:600;padding:7px 14px;border-radius:999px;transition:background .2s,color .2s}
+.top nav a:hover{background:#fff;color:var(--bg)}
+.top .btn{min-height:40px;padding:0 18px;font-size:14px}
+@media (max-width:920px){.top nav{display:none}}
+@media (max-width:480px){.badge{letter-spacing:.06em;font-size:11px}.hero h1{font-size:40px}.hero .logo{width:104px}}
+
+/* hero */
+.hero{min-height:100svh;display:flex;align-items:center;padding:110px 0 70px;text-align:center;overflow:hidden}
+.hero::before{content:"";position:absolute;width:min(900px,160vw);aspect-ratio:1;left:50%;top:-38%;transform:translateX(-50%);background:radial-gradient(circle,rgba(0,240,255,.17),transparent 62%);pointer-events:none}
+.hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse at 50% 30%,#000 20%,transparent 70%);-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 20%,transparent 70%);pointer-events:none}
+.hero .wrap{position:relative;z-index:1}
+.hero .logo{width:132px;margin:0 auto 22px;filter:drop-shadow(0 0 32px rgba(0,240,255,.55));animation:flota 6s ease-in-out infinite}
+@keyframes flota{50%{transform:translateY(-10px)}}
+.hero h1{font-size:clamp(40px,7vw,84px);font-weight:700;margin:22px auto 20px;max-width:900px;letter-spacing:-.035em;line-height:1.02}
+.hero h1 span{display:block;background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:.06em}
+.hero .lead{margin:0 auto;font-size:clamp(16px,2.2vw,19px)}
+.hero .lead b{color:#fff;font-weight:600}
+.cta{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:32px}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:34px}
+.chip{font-size:13px;color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--borde);padding:7px 14px;border-radius:999px}
+
+/* números */
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:-30px;position:relative;z-index:2}
+.n{padding:22px}
+.n b{display:block;font:700 clamp(30px,4vw,44px) var(--titulo);line-height:1.05;background:linear-gradient(90deg,#fff,var(--cyan3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.n span{color:var(--muted);font-size:14px}
+@media (max-width:760px){.nums{grid-template-columns:1fr 1fr}}
+
+/* proceso */
+.pasos{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:40px}
+.paso{padding:22px;text-align:left;color:inherit;transition:border-color .25s,transform .25s,box-shadow .25s}
+.paso:hover{transform:translateY(-3px)}
+.paso.on{border-color:rgba(0,240,255,.5);box-shadow:0 0 0 1px rgba(0,240,255,.2),0 20px 50px -25px rgba(0,240,255,.45)}
+.paso .k{font:600 12px var(--titulo);color:var(--cyan3);letter-spacing:.14em;margin-bottom:10px}
+.paso .k::before{content:"PASO "}
+.paso h3{font-size:20px;font-weight:600;margin-bottom:6px}
+.paso p{color:var(--muted);font-size:14.5px}
+.detalle{margin-top:14px;padding:24px 26px;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.detalle h4{color:var(--cyan3);font-size:16px;font-weight:600;margin-bottom:10px}
+.detalle ol{padding-left:20px;font-size:15px;display:grid;gap:6px}
+.detalle ol li::marker{color:var(--cyan3);font-weight:700}
+.detalle ul{list-style:none;font-size:15px;display:grid;gap:6px}
+.detalle ul li b{color:#fff}
+.detalle .tip{font-size:14px;color:var(--muted);margin-top:12px}
+@media (max-width:860px){.pasos{grid-template-columns:1fr 1fr}.detalle{grid-template-columns:1fr}}
+
+/* roles */
+.roles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:34px}
+.rol{padding:26px}
+.rol .i{font-size:30px}
+.rol h3{font-size:22px;font-weight:600;margin:10px 0 6px}
+.rol p{color:var(--muted);font-size:15px}
+@media (max-width:640px){.roles{grid-template-columns:1fr}}
+
+/* demo */
+#demo::before{content:"";position:absolute;inset:10% 0 auto;height:70%;background:radial-gradient(ellipse at 50% 50%,rgba(0,86,253,.16),transparent 65%);pointer-events:none}
+#demo .wrap{max-width:1600px;position:relative}
+.guia{margin:34px auto 18px}
+.guia-pasos{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:12px}
+.guia-pasos li{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dim);background:rgba(255,255,255,.03);border:1px solid var(--borde);border-radius:999px;padding:6px 14px 6px 6px}
+.guia-pasos li span{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);font-size:12px}
+.guia-pasos li.cur{color:#fff;border-color:rgba(0,240,255,.5);box-shadow:0 0 20px -6px rgba(0,240,255,.6)}
+.guia-pasos li.cur span{background:var(--cyan);color:var(--bg)}
+.guia-pasos li.ok{color:var(--ok)}
+.guia-pasos li.ok span{background:var(--ok);color:#03210f}
+.guia-tip{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 18px;font-size:15px;max-width:980px;margin:0 auto}
+.guia-tip b{color:#fff}
+.guia-reset{margin-left:auto;background:none;border:1px solid var(--borde);color:var(--muted);border-radius:10px;padding:7px 12px;font-size:13px}
+.guia-reset:hover{color:#fff;border-color:var(--cyan3)}
+#vtApp .vt-window{border-color:rgba(0,240,255,.25);box-shadow:0 0 0 1px rgba(0,240,255,.12),0 40px 100px -30px rgba(0,240,255,.35),0 30px 60px -20px rgba(0,0,0,.9)}
+.nota-demo{font-size:13px;color:var(--dim);margin-top:14px;text-align:center}
+@media (max-width:600px){.guia-pasos{gap:6px}.guia-pasos li{font-size:12px;padding:4px 10px 4px 4px}.guia-pasos li span{width:20px;height:20px}.guia-tip{font-size:14px}}
+
+/* funciones */
+.funcs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:36px}
+.fn{padding:24px;transition:border-color .25s,transform .25s}
+.fn:hover{border-color:rgba(0,240,255,.35);transform:translateY(-3px)}
+.fn .i{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.2);margin-bottom:14px}
+.fn h3{font-size:18px;font-weight:600;margin-bottom:6px}
+.fn p{color:var(--muted);font-size:15px}
+@media (max-width:900px){.funcs{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.funcs{grid-template-columns:1fr}}
+
+/* informe */
+.informe{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px;align-items:start}
+.informe figure{border-radius:18px;overflow:hidden;border:1px solid var(--borde);background:#fff;box-shadow:0 30px 60px -30px rgba(0,240,255,.25)}
+.informe figcaption{background:#0b0d11;color:var(--muted);font-size:13.5px;padding:12px 16px}
+@media (max-width:760px){.informe{grid-template-columns:1fr}}
+
+/* arquitectura */
+.arq{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-top:36px}
+.capas{display:grid;gap:10px}
+.capa{display:flex;gap:16px;align-items:center;padding:16px 18px}
+.capa .t{flex:none;min-width:150px;text-align:center;font:600 11px var(--titulo);letter-spacing:.12em;color:var(--bg);background:linear-gradient(90deg,var(--cyan),#4d8dff);padding:7px 8px;border-radius:8px}
+.capa p{font-size:14.5px;color:var(--muted)}
+.capa p b{color:#fff}
+.stack{padding:24px}
+.stack h3{font-size:18px;font-weight:600;margin-bottom:14px}
+.stack ul{list-style:none;display:grid;gap:10px;font-size:15px}
+.stack li{padding-left:18px;position:relative}
+.stack li::before{content:"";position:absolute;left:0;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.stack li b{color:#fff;font-weight:600}
+@media (max-width:860px){.arq{grid-template-columns:1fr}}
+@media (max-width:480px){.capa{flex-direction:column;align-items:flex-start;gap:8px}}
+
+/* proyecto */
+.proyecto{display:grid;gap:12px;margin-top:36px}
+.card{padding:28px}
+.card h3{font-size:22px;font-weight:600;margin-bottom:12px}
+.card p{color:var(--muted);font-size:15.5px;margin-bottom:12px}
+.card p b{color:#fff;font-weight:600}
+
+footer.pie{border-top:1px solid var(--borde);padding:26px 0}
+footer.pie .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;font-size:13.5px;color:var(--dim)}
+footer.pie b{color:#fff;font:700 16px var(--titulo);margin-right:8px}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#inicio"><img src="logo.png" alt="">VorTrack</a>
+    <nav>
+      <a href="#proceso">El proceso</a>
+      <a href="#demo">Demo</a>
+      <a href="#funciones">Funciones</a>
+      <a href="#informe">Informe PDF</a>
+      <a href="#proyecto">Proyecto</a>
+    </nav>
+    <a class="btn btn-pri" href="#demo">Probar demo</a>
+  </div>
+</header>
+
+<section class="hero" id="inicio">
+  <div class="wrap">
+    <img class="logo" src="logo.png" alt="Logo de VorTrack" width="256" height="256">
+    <span class="badge">Gestión · Seguimiento · Transformación</span>
+    <h1>Cada botella cuenta. <span>Cada pieza se rastrea.</span></h1>
+    <p class="lead"><b>VorTrack</b> es el software de escritorio del proyecto <b>TRANSORE ISC</b> del <b>Instituto San Carlos de La Salle</b>: registra, organiza y analiza el aprovechamiento del PET reciclado hasta convertirlo en material didáctico impreso en 3D.</p>
+    <div class="cta">
+      <a class="btn btn-pri" href="#demo">Probar la demo &nbsp;→</a>
+      <a class="btn btn-sec" href="#proceso">Ver el proceso</a>
+    </div>
+    <div class="chips">
+      <span class="chip">🖥️ Escritorio · Windows</span>
+      <span class="chip">🗄️ Base de datos SQL Server</span>
+      <span class="chip">🔐 2 roles de acceso</span>
+      <span class="chip">📄 Informes en PDF</span>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="nums rv">
+    <div class="n"><b>4</b><span>pasos trazados: recolección, transformación, impresión e histórico</span></div>
+    <div class="n"><b>6</b><span>indicadores en vivo en el tablero del histórico</span></div>
+    <div class="n"><b>100</b><span>puntos por cada kg de PET en el ranking de estudiantes</span></div>
+    <div class="n"><b>6</b><span>secciones de administración (crear, editar y eliminar)</span></div>
+  </div>
+</div>
+
+<section id="proceso">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">EL PROCESO</span>
+      <h2>Del PET reciclado al <em>material didáctico</em></h2>
+      <p class="lead">Cada registro queda enlazado con el anterior: se sabe de qué jornada salió el filamento y con qué filamento se imprimió cada pieza. Toca cada paso.</p>
+    </div>
+    <div class="pasos rv" id="pasos">
+      <button class="paso on" data-i="0"><div class="k">1</div><h3>Recolección</h3><p>Se recogen botellas de PET y se registra la jornada.</p></button>
+      <button class="paso" data-i="1"><div class="k">2</div><h3>Transformación</h3><p>El PET se convierte en filamento 3D por extrusión.</p></button>
+      <button class="paso" data-i="2"><div class="k">3</div><h3>Impresión</h3><p>El filamento se imprime como material didáctico.</p></button>
+      <button class="paso" data-i="3"><div class="k">4</div><h3>Histórico</h3><p>Indicadores, ranking, proyecciones e informe PDF.</p></button>
+    </div>
+    <div class="detalle rv" id="detalle" aria-live="polite"></div>
+  </div>
+</section>
+
+<section style="padding-top:10px">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">¿QUIÉN USA VORTRACK?</span>
+      <h2>Dos roles, <em>un mismo registro</em></h2>
+    </div>
+    <div class="roles">
+      <div class="rol rv"><div class="i">🎓</div><h3>Estudiante</h3><p>Registra la operación diaria (recolección, transformación e impresión) y consulta el histórico. Su cuenta la crea el administrador.</p></div>
+      <div class="rol rv"><div class="i">⚙️</div><h3>Administrador</h3><p>Puede hacer todo lo del estudiante y además administra el sistema: cuentas, catálogos (lugares y modelos) y edición de registros.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="rv center">
+      <span class="badge">DEMO INTERACTIVA</span>
+      <h2>Prueba <em>VorTrack</em> tal como es</h2>
+      <p class="lead">Las mismas pantallas, campos, validaciones y mensajes de la aplicación de escritorio. Sigue los pasos: tu nombre aparecerá en el ranking y en el informe.</p>
+    </div>
+    <div class="guia" id="vtGuide"></div>
+    <div id="vtApp"></div>
+    <p class="nota-demo">Demo web: los datos se guardan solo en este navegador. La aplicación real funciona en Windows con base de datos SQL Server. Los registros de ejemplo son ficticios.</p>
+  </div>
+</section>
+
+<section id="funciones">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">FUNCIONES</span>
+      <h2>Lo que VorTrack <em>hace por el proyecto</em></h2>
+    </div>
+    <div class="funcs">
+      <div class="fn rv"><div class="i">🛣️</div><h3>Trazabilidad</h3><p>Lugar y responsable → jornada de recolección → producción de filamento → impresión. Nada queda suelto.</p></div>
+      <div class="fn rv"><div class="i">🧮</div><h3>Desperdicio automático</h3><p>Al elegir la jornada, el peso ingresado se copia solo y el desperdicio se calcula al escribir el peso salido.</p></div>
+      <div class="fn rv"><div class="i">🔮</div><h3>Proyecciones</h3><p>Al elegir el modelo y la cantidad se proyectan los gramos y minutos de impresión. En el histórico, cuántas piezas alcanzan con un filamento.</p></div>
+      <div class="fn rv"><div class="i">🏆</div><h3>Ranking de participación</h3><p>Gamificación: cada estudiante suma 100 puntos por kg de PET aportado en sus jornadas.</p></div>
+      <div class="fn rv"><div class="i">⚙️</div><h3>Panel de administración</h3><p>Estudiantes, Lugares, Modelos, Recolecciones, Transformaciones e Impresiones. Las eliminaciones respetan la trazabilidad.</p></div>
+      <div class="fn rv"><div class="i">⚡</div><h3>Carga en paralelo</h3><p>Las consultas se hacen todas a la vez con un indicador de porcentaje; las ventanas cambian con transiciones suaves.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="informe" style="padding-top:20px">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">INFORME PDF</span>
+      <h2>Un informe de gestión <em>en un clic</em></h2>
+      <p class="lead">Desde HISTÓRICO INFORMES, VorTrack arma un PDF con resumen ejecutivo, hallazgos redactados automáticamente, flujo del material, gráficos, ranking y tablas, y lo guarda en Descargas. En la demo puedes generar el tuyo.</p>
+    </div>
+    <div class="informe">
+      <figure class="rv"><img src="informe_resumen.jpg" alt="Portada y resumen ejecutivo del informe PDF" loading="lazy" width="1200" height="1208"><figcaption>Portada, resumen ejecutivo y hallazgos clave (datos ficticios).</figcaption></figure>
+      <figure class="rv"><img src="informe_graficos.jpg" alt="Gráficos y ranking del informe PDF" loading="lazy" width="1200" height="1026"><figcaption>Flujo del material, PET por mes y por lugar, y ranking (datos ficticios).</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="arquitectura" style="padding-top:20px">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">BAJO EL CAPÓ</span>
+      <h2>Construido <em>por capas</em></h2>
+      <p class="lead">El código está organizado con principios SOLID: cada capa depende solo de la de abajo y las dependencias se inyectan desde una raíz de composición.</p>
+    </div>
+    <div class="arq">
+      <div class="capas rv">
+        <div class="capa"><span class="t">PRESENTACIÓN</span><p><b>Pantallas</b>: login, inicio, recolección, transformación, impresión, histórico y administración, con una fábrica de widgets común.</p></div>
+        <div class="capa"><span class="t">SERVICIOS</span><p><b>Lógica de negocio</b>: autenticación por rol, validaciones, proyecciones e informe PDF.</p></div>
+        <div class="capa"><span class="t">DATOS</span><p><b>Repositorios</b> por entidad: usuarios, jornadas, producción, fabricación, catálogos e indicadores.</p></div>
+        <div class="capa"><span class="t">INFRAESTRUCTURA</span><p><b>SQL Server</b> (base vortrack_db) con relaciones que garantizan la trazabilidad.</p></div>
+      </div>
+      <div class="stack rv">
+        <h3>Tecnologías</h3>
+        <ul>
+          <li><b>Python</b> con <b>CustomTkinter</b> (y respaldo en Tkinter puro)</li>
+          <li><b>Microsoft SQL Server</b> vía pyodbc</li>
+          <li><b>PDF</b> generado con Microsoft Edge, sin instalar nada extra</li>
+          <li><b>Hilos</b> para cargar datos sin congelar la ventana</li>
+          <li><b>Pruebas</b> automáticas de servicios y de humo contra la base</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="proyecto" style="padding-top:20px">
+  <div class="wrap">
+    <div class="rv">
+      <span class="badge">EL PROYECTO</span>
+      <h2>TRANSORE ISC</h2>
+    </div>
+    <div class="proyecto">
+      <div class="card rv">
+        <h3>Instituto San Carlos de La Salle</h3>
+        <p>VorTrack sigue el rastro del PET reciclado hasta convertirse en material didáctico impreso, y le da al proyecto indicadores para <b>fortalecer el control de procesos</b>, <b>generar métricas</b> y <b>apoyar la toma de decisiones</b>.</p>
+        <p>Desarrollado por <b>Miguel Ruiz Ramirez</b>.</p>
+        <p>Soporte: <a href="mailto:vortrack.soporte@gmail.com">vortrack.soporte@gmail.com</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="pie">
+  <div class="wrap"><span><b>VorTrack</b>© 2026 desarrollado por Miguel Ruiz Ramirez</span><span>TRANSORE ISC · Instituto San Carlos de La Salle</span></div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+(() => {
+  // Barra superior sólida al bajar
+  const barra = document.querySelector('.top');
+  addEventListener('scroll', () => barra.classList.toggle('solid', scrollY > 30), { passive: true });
+
+  // Aparición al hacer scroll
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .1 });
+  document.querySelectorAll('.rv').forEach(el => io.observe(el));
+
+  // Detalle de cada paso (tomado del manual de usuario)
+  const PASOS = [
+    { h: 'Cómo registrar una jornada', ol: ['Elige la fecha del registro.', 'Selecciona el estudiante/responsable y el lugar de recolección.', 'Escribe la cantidad de botellas y el peso PET (kg) aprovechado.', 'Añade observaciones si hace falta y pulsa Registrar PET.'],
+      ul: [['Responsable', 'a quién se le atribuye la jornada (suma puntos en el ranking).'], ['Peso PET (kg)', 'kilos aprovechados; es el dato obligatorio.'], ['Cantidad de botellas', 'número de envases recogidos (opcional).']],
+      tip: 'Es el primer eslabón de la trazabilidad: sin una recolección no hay filamento que producir.' },
+    { h: 'Cómo registrar una producción', ol: ['Selecciona la jornada de origen: su peso de PET se copia como peso ingresado.', 'Escribe el peso salido (filamento obtenido); el desperdicio se calcula solo.', 'Completa color, diámetro (mm) y metros producidos.', 'Pulsa Registrar Filamento.'],
+      ul: [['Peso salido (kg)', 'filamento obtenido; no puede superar el ingresado.'], ['Desperdicio (kg)', 'automático: peso ingresado − peso salido.'], ['Diámetro / Metros', 'características del filamento producido.']],
+      tip: 'Si el peso salido es mayor que el ingresado, VorTrack no deja guardar.' },
+    { h: 'Cómo registrar una impresión', ol: ['Elige el modelo (material didáctico) y el filamento que usarás.', 'Indica la cantidad de piezas: el sistema proyecta el peso (g) y el tiempo (min).', 'Ajusta los valores si es necesario y elige el estado.', 'Pulsa Registrar Impresión.'],
+      ul: [['Modelo', 'la pieza a fabricar; trae estimados de peso y tiempo.'], ['Filamento utilizado', 'la producción de la que se toma el material.'], ['Estado', 'En proceso, Finalizado o Fallido.']],
+      tip: 'El peso y el tiempo se autocompletan como proyección; se pueden corregir con el valor real.' },
+    { h: 'Qué encuentras en el histórico', ol: ['Indicadores: PET recolectado, filamento producido, desperdicio, objetos impresos, responsables y botellas.', 'Ranking de participación de los estudiantes por PET aportado.', 'Proyecciones: eliges un filamento y ves cuántas piezas de cada modelo alcanzan y el sobrante.', 'GENERAR INFORME crea el PDF y lo guarda en Descargas.'],
+      ul: [['Gamificación', '100 puntos por cada kg de PET aportado.'], ['Informe', 'portada, resumen, hallazgos, gráficos, ranking y tablas.']],
+      tip: 'Ideal para presentar resultados a directivos o docentes.' },
+  ];
+  const det = document.getElementById('detalle');
+  function mostrar(i) {
+    document.querySelectorAll('.paso').forEach(p => p.classList.toggle('on', +p.dataset.i === i));
+    const p = PASOS[i];
+    det.innerHTML = `<div><h4>${p.h}</h4><ol>${p.ol.map(x => `<li>${x}</li>`).join('')}</ol></div>
+      <div><h4>Para qué sirve</h4><ul>${p.ul.map(([a, b]) => `<li><b>${a}:</b> ${b}</li>`).join('')}</ul><p class="tip">💡 ${p.tip}</p></div>`;
+  }
+  document.querySelectorAll('.paso').forEach(p => p.addEventListener('click', () => mostrar(+p.dataset.i)));
+  mostrar(0);
+})();
+</script>
+</body>
+</html>
